@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+
+# Next.js output
+.next/
+out/
+next-env.d.ts
+
+# Build output
+build/
+dist/
+*.tsbuildinfo
+
+# Environment (secrets live here — never commit)
+.env
+.env.*
+!.env.example
+
+# Vercel
+.vercel
+
+# Agent skills, installed and locked by `npx skills add`
+.agents/
+skills-lock.json
+
+# Supabase CLI local state
+.supabase/
+supabase/.temp/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Misc
+*.pem

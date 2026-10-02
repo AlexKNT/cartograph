@@ -1,26 +1,52 @@
 @import "tailwindcss";
 
+/* Dark is a class on the root element, written from the theme cookie. It is
+   deliberately not a `prefers-color-scheme` media query: forcing light has to
+   beat a dark system. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Four decisions, everything else derived: one blue for anything interactive,
+   green for what flows into a file, amber for what flows out, and greyscale
+   for surfaces, borders and body text. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fbfbfc;
+  --surface: #ffffff;
+  --border: #e4e4e7;
+  --foreground: #18181b;
+  --muted: #6b7280;
+  --accent: #2563eb;
+  --incoming: #15803d;
+  --outgoing: #b45309;
+}
+
+.dark {
+  --background: #0a0a0b;
+  --surface: #131316;
+  --border: #2a2a2f;
+  --foreground: #ededf0;
+  --muted: #8f8f98;
+  --accent: #3b82f6;
+  --incoming: #4ade80;
+  --outgoing: #fbbf24;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
   --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-incoming: var(--incoming);
+  --color-outgoing: var(--outgoing);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.8125rem;
+  line-height: 1.4;
 }
