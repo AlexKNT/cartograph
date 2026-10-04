@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "eslint",
     "parse": "node scripts/parse.ts",
-    "fold": "node scripts/fold.ts"
+    "fold": "node scripts/fold.ts",
+    "evals": "node scripts/evals.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.10",

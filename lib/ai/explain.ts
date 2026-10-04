@@ -10,7 +10,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { traceable } from "langsmith/traceable";
 import { createServerSupabaseClient } from "../supabase/server.ts";
-import { aiClient } from "./client.ts";
+import { askExplanation } from "./model.ts";
 import {
   EXPLAIN_SYSTEM,
   FILE_PROMPT_VERSION,
@@ -122,25 +122,6 @@ async function writeCached(
   }
 }
 
-async function askModel(prompt: string): Promise<string> {
-  const response = await aiClient().chat.completions.create({
-    model: MODEL,
-    temperature: 0.2,
-    max_tokens: 500,
-    // The graph is someone else's source code read into a shape. Asking the
-    // provider not to keep it is written down rather than assumed.
-    store: false,
-    messages: [
-      { role: "system", content: EXPLAIN_SYSTEM },
-      { role: "user", content: prompt },
-    ],
-  });
-
-  const body = response.choices[0]?.message.content?.trim() ?? "";
-  if (body === "") throw new Error("The model answered with nothing.");
-  return body;
-}
-
 async function explainSubject(subject: Subject): Promise<Explanation> {
   const supabase = createServerSupabaseClient();
 
@@ -159,7 +140,7 @@ async function explainSubject(subject: Subject): Promise<Explanation> {
     return { status: "explained", body: cached, cached: true, model: MODEL };
   }
 
-  const body = await askModel(subject.prompt);
+  const body = await askExplanation(EXPLAIN_SYSTEM, subject.prompt);
   await writeCached(supabase, subject, body);
   return { status: "explained", body, cached: false, model: MODEL };
 }

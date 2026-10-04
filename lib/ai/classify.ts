@@ -9,10 +9,8 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { traceable } from "langsmith/traceable";
-import { CLASSIFIABLE_ROLE_IDS } from "../graph/rail.ts";
 import { createServerSupabaseClient } from "../supabase/server.ts";
-import { aiClient } from "./client.ts";
-import { CLASSIFY_SYSTEM, MODEL, classifyPrompt } from "./prompts.ts";
+import { classifyPaths } from "./model.ts";
 
 /**
  * Files per call. Paths are short, so this is a token budget rather than a
@@ -51,11 +49,6 @@ function chunks<T>(items: readonly T[], size: number): T[][] {
   return out;
 }
 
-function fieldOf(value: unknown, key: string): unknown {
-  if (typeof value !== "object" || value === null) return undefined;
-  return (value as Record<string, unknown>)[key];
-}
-
 /** Which of these files already carry a role, and therefore are not asked about. */
 async function readLabelled(
   supabase: SupabaseClient,
@@ -79,50 +72,17 @@ async function readLabelled(
   return labelled;
 }
 
-/**
- * The model's answer, kept strictly: only paths that were asked about, and only
- * roles the rail can show. An invented path or an out-of-vocabulary role is
- * dropped rather than stored, because a role is what colours the map.
- */
-function rolesFrom(content: string, batch: readonly UnidentifiedFile[]): { id: string; role: string }[] {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(content);
-  } catch {
-    throw new Error("The model did not answer with JSON.");
-  }
-
-  const roles = fieldOf(parsed, "roles");
-  const byPath = new Map(batch.map((file) => [file.path, file.id]));
-  const found: { id: string; role: string }[] = [];
-
-  if (typeof roles !== "object" || roles === null) return found;
-
-  for (const [path, role] of Object.entries(roles)) {
-    const id = byPath.get(path);
-    if (id === undefined) continue;
-    if (typeof role !== "string" || !CLASSIFIABLE_ROLE_IDS.includes(role)) continue;
-    found.push({ id, role });
-  }
-  return found;
-}
-
 async function askRoles(
   batch: readonly UnidentifiedFile[],
 ): Promise<{ id: string; role: string }[]> {
-  const response = await aiClient().chat.completions.create({
-    model: MODEL,
-    temperature: 0,
-    max_tokens: 1500,
-    store: false,
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: CLASSIFY_SYSTEM },
-      { role: "user", content: classifyPrompt(batch.map((file) => file.path)) },
-    ],
-  });
+  const labels = await classifyPaths(batch.map((file) => file.path));
+  const found: { id: string; role: string }[] = [];
 
-  return rolesFrom(response.choices[0]?.message.content ?? "", batch);
+  for (const file of batch) {
+    const role = labels.get(file.path);
+    if (role !== undefined) found.push({ id: file.id, role });
+  }
+  return found;
 }
 
 export const classifyFiles = traceable(
