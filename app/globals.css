@@ -7,7 +7,9 @@
 
 /* Four decisions, everything else derived: one blue for anything interactive,
    green for what flows into a file, amber for what flows out, and greyscale
-   for surfaces, borders and body text. */
+   for surfaces, borders and body text. The kind colours are the second thing
+   that earns a hue: what a file is, kept clear of the three above so a swatch
+   can never be mistaken for a selection or a direction. */
 :root {
   --background: #fbfbfc;
   --surface: #ffffff;
@@ -17,6 +19,10 @@
   --accent: #2563eb;
   --incoming: #15803d;
   --outgoing: #b45309;
+  --kind-source: #7c3aed;
+  --kind-test: #0e7490;
+  --kind-barrel: #db2777;
+  --kind-declaration: #71717a;
 }
 
 .dark {
@@ -28,6 +34,10 @@
   --accent: #3b82f6;
   --incoming: #4ade80;
   --outgoing: #fbbf24;
+  --kind-source: #a78bfa;
+  --kind-test: #22d3ee;
+  --kind-barrel: #f472b6;
+  --kind-declaration: #a1a1aa;
 }
 
 @theme inline {
@@ -39,6 +49,10 @@
   --color-accent: var(--accent);
   --color-incoming: var(--incoming);
   --color-outgoing: var(--outgoing);
+  --color-kind-source: var(--kind-source);
+  --color-kind-test: var(--kind-test);
+  --color-kind-barrel: var(--kind-barrel);
+  --color-kind-declaration: var(--kind-declaration);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }

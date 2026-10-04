@@ -8,12 +8,15 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "parse": "node scripts/parse.ts"
+    "parse": "node scripts/parse.ts",
+    "fold": "node scripts/fold.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.10",
+    "@dagrejs/dagre": "^3.1.1",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
+    "@xyflow/react": "^12.12.0",
     "next": "16.3.8",
     "react": "19.2.8",
     "react-dom": "19.2.8",
