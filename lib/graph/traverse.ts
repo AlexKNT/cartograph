@@ -9,8 +9,7 @@
  */
 
 import type { ImportEdge } from "../parser/types.ts";
-import { categoryOf } from "./categories.ts";
-import type { FileCategory } from "./types.ts";
+import type { CategoryIndex, FileCategory } from "./types.ts";
 
 export type WalkDirection = "in" | "out";
 
@@ -19,7 +18,8 @@ export const WALK_DEPTH = 2;
 
 export interface WalkedFile {
   path: string;
-  category: FileCategory;
+  /** Null when no rail category claims the file. */
+  swatch: FileCategory | null;
   /** 1 for a direct neighbour, 2 for a neighbour's neighbour. */
   depth: number;
 }
@@ -29,6 +29,7 @@ export interface WalkedFile {
 export function transitiveWalk(
   path: string,
   edges: readonly ImportEdge[],
+  index: CategoryIndex,
   direction: WalkDirection,
   depth: number = WALK_DEPTH,
 ): WalkedFile[] {
@@ -53,7 +54,11 @@ export function transitiveWalk(
         if (visited.has(neighbour)) continue;
         visited.add(neighbour);
         next.push(neighbour);
-        found.push({ path: neighbour, category: categoryOf(neighbour), depth: step });
+        found.push({
+          path: neighbour,
+          swatch: index.get(neighbour)?.swatch ?? null,
+          depth: step,
+        });
       }
     }
     if (next.length === 0) break;

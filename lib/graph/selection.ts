@@ -5,9 +5,8 @@
  */
 
 import type { ImportEdge } from "../parser/types.ts";
-import { categoryOf } from "./categories.ts";
 import type { FoldedNode } from "./fold.ts";
-import type { Direction, FileCategory, Selection, Strength } from "./types.ts";
+import type { CategoryIndex, Direction, Selection, Strength } from "./types.ts";
 
 export interface Emphasis {
   nodeStrength(id: string): Strength;
@@ -30,20 +29,21 @@ export function dimmer(left: Strength, right: Strength | undefined): Strength {
 
 /**
  * The rail's category is a second reason to dim, on the same terms as a
- * selection: a file of the kind stays full and everything else dims. An edge
- * is only full when both of its ends are the kind, because an edge that leaves
- * the category is not in it.
+ * selection: a file in the category stays full and everything else dims. An
+ * edge is only full when both of its ends are in it, because an edge that
+ * leaves the category is not in it.
  */
 export function emphasiseCategory(
-  category: FileCategory,
+  category: string,
+  index: CategoryIndex,
   nodes: readonly FoldedNode[],
 ): Emphasis {
   const inNodes = new Set<string>();
   for (const node of nodes) {
-    if (node.files.some((file) => categoryOf(file) === category)) inNodes.add(node.id);
+    if (node.files.some((file) => index.get(file)?.id === category)) inNodes.add(node.id);
   }
 
-  const isMatch = (path: string): boolean => categoryOf(path) === category;
+  const isMatch = (path: string): boolean => index.get(path)?.id === category;
 
   return {
     nodeStrength: (id) => (inNodes.has(id) ? "full" : "dim"),

@@ -5,7 +5,6 @@
  */
 
 import type { ImportEdge } from "../parser/types.ts";
-import { categoryOf } from "./categories.ts";
 import type { Folded } from "./fold.ts";
 import { ownerIndex } from "./fold.ts";
 import { MAX_PANEL_ROWS, foldedBox, panelBox, placeNodes, type Box } from "./layout.ts";
@@ -30,7 +29,9 @@ export function buildCanvas(
 
   const emphasis = emphasise(state.selected, fold.nodes, fileEdges, ownerOf);
   const filter =
-    state.category === null ? null : emphasiseCategory(state.category, fold.nodes);
+    state.category === null
+      ? null
+      : emphasiseCategory(state.category, state.categories, fold.nodes);
 
   // Two reasons to dim, and dim wins: a kept node is still dimmed by the rail
   // when it holds none of the kind the rail is narrowing to.
@@ -75,7 +76,7 @@ export function buildCanvas(
       rows: rows.map((path) => ({
         path,
         name: fileName(path),
-        category: categoryOf(path),
+        swatch: state.categories.get(path)?.swatch ?? null,
         strength: rowStrength(path),
       })),
       hiddenRows: node.files.length - rows.length,
@@ -83,7 +84,8 @@ export function buildCanvas(
       matchCount:
         state.category === null
           ? null
-          : node.files.filter((file) => categoryOf(file) === state.category).length,
+          : node.files.filter((file) => state.categories.get(file)?.id === state.category)
+              .length,
       width: box.width,
       height: box.height,
       x: point.x,

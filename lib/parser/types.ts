@@ -126,6 +126,26 @@ export interface CoverageReport {
   unresolvedByReason: CoverageGroup[];
 }
 
+/** A role a file plays, assigned by an adapter from where it is or what it
+ *  says. One per file: the column that stores it is unique on the file. */
+export interface FileRole {
+  /** Repository-relative, POSIX separators. */
+  file: string;
+  /** The adapter's own vocabulary, e.g. "page-route" or "controller". */
+  role: string;
+}
+
+/** A route an adapter recovered from a file. Both parts are exact, or the
+ *  route is left out: a guessed pattern is the same failure as an invented
+ *  edge. `method` is null for a surface that has none, like a Next.js page. */
+export interface ParsedRoute {
+  /** The file the route was read from. */
+  file: string;
+  method: string | null;
+  /** The full route pattern, spelled the way the framework's syntax does. */
+  route: string;
+}
+
 export interface ParseStats {
   /** parsed + skipped, by construction. */
   filesFound: number;
@@ -150,6 +170,10 @@ export interface ParseResult {
   };
   /** Paths the adapter named as entry points, whether or not anything imports them. */
   entryPoints: string[];
+  /** Roles the adapter assigned, in file order. */
+  roles: FileRole[];
+  /** Routes the adapter recovered, exact or absent. */
+  routes: ParsedRoute[];
   stats: ParseStats;
   files: ParsedFile[];
   edges: ImportEdge[];

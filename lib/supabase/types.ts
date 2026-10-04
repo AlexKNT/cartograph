@@ -95,3 +95,41 @@ export interface NewEdge {
   to_file_id: string;
   kind: StoredEdgeKind;
 }
+
+/** A role the adapter assigned by convention. Classification is a later phase. */
+export interface NewRole {
+  analysis_id: string;
+  organization_id: string;
+  file_id: string;
+  role: string;
+  source: "convention";
+}
+
+/** A route recovered from a file. `method` is null for a surface without one. */
+export interface NewRoute {
+  analysis_id: string;
+  organization_id: string;
+  file_id: string;
+  method: string | null;
+  path: string;
+}
+
+/** A row of `file_roles`, naming its file by id. */
+export interface RoleRecord {
+  file_id: string;
+  role: string;
+}
+
+/** A row of `routes`, naming its file by id. */
+export interface RouteRecord {
+  file_id: string;
+  method: string | null;
+  path: string;
+}
+
+/** A route resolved back to the file it lives in, as the interface reads it. */
+export interface StoredRoute {
+  file: string;
+  method: string | null;
+  route: string;
+}

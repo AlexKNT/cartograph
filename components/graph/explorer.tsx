@@ -13,14 +13,10 @@ import { DetailPane, type PaneTab } from "@/components/graph/detail-pane";
 import { MapShell } from "@/components/map-shell";
 import type { CoverageCounts } from "@/lib/graph/coverage";
 import { ownerIndex, type Folded } from "@/lib/graph/fold";
-import type {
-  FileCategory,
-  Hover,
-  MapSummary,
-  RepositoryFacts,
-  Selection,
-} from "@/lib/graph/types";
+import { categoryIndex, railCounts, railFor } from "@/lib/graph/rail";
+import type { Hover, MapSummary, RepositoryFacts, Selection } from "@/lib/graph/types";
 import type { ImportEdge, ParsedFile } from "@/lib/parser/types";
+import type { StoredRoute } from "@/lib/supabase/types";
 
 export interface ExplorerProps {
   fold: Folded;
@@ -31,6 +27,10 @@ export interface ExplorerProps {
   /** Paths the adapter named as reached by the framework. They are not orphans
    *  even when nothing imports them, so the insights leave them out. */
   entryPoints: readonly string[];
+  /** The role the adapter gave each file, by path. */
+  roles: Readonly<Record<string, string>>;
+  /** Routes recovered exactly, for the route table. */
+  routes: readonly StoredRoute[];
   /** What the run recorded about the imports it saw, for the banner. */
   coverage: CoverageCounts;
 }
@@ -50,7 +50,17 @@ export function Explorer(props: ExplorerProps) {
   );
 }
 
-function ExplorerShell({ fold, files, edges, summary, facts, entryPoints, coverage }: ExplorerProps) {
+function ExplorerShell({
+  fold,
+  files,
+  edges,
+  summary,
+  facts,
+  entryPoints,
+  roles,
+  routes,
+  coverage,
+}: ExplorerProps) {
   const { fitView, getZoom } = useReactFlow();
 
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set<string>());
@@ -58,7 +68,17 @@ function ExplorerShell({ fold, files, edges, summary, facts, entryPoints, covera
   const [hovered, setHovered] = useState<Hover | null>(null);
   // The rail's narrowing is a third kind of emphasis, alongside the selection
   // and the hover, and it survives both: picking a file does not drop it.
-  const [category, setCategory] = useState<FileCategory | null>(null);
+  const [category, setCategory] = useState<string | null>(null);
+
+  // The rail is the framework's own vocabulary; the index turns each file into
+  // the entry it belongs to, and everything that colours or filters reads it.
+  const rail = useMemo(() => railFor(summary.framework), [summary.framework]);
+  const categories = useMemo(
+    () => categoryIndex(summary.framework, files, new Map(Object.entries(roles))),
+    [summary.framework, files, roles],
+  );
+  const counts = useMemo(() => railCounts(rail, categories), [rail, categories]);
+  const activeRail = category === null ? null : (rail.find((entry) => entry.id === category) ?? null);
   // The tab belongs to the pane, not to the selection: someone comparing
   // explanations across three files should not reopen it three times.
   const [tab, setTab] = useState<PaneTab>("structure");
@@ -122,7 +142,14 @@ function ExplorerShell({ fold, files, edges, summary, facts, entryPoints, covera
 
   return (
     <MapShell
-      rail={<CategoryRail summary={summary} active={category} onCategory={setCategory} />}
+      rail={
+        <CategoryRail
+          summary={summary}
+          counts={counts}
+          active={category}
+          onCategory={setCategory}
+        />
+      }
       map={
         <div className="flex h-full min-h-0 flex-col">
           <CoverageBanner counts={coverage} />
@@ -132,7 +159,9 @@ function ExplorerShell({ fold, files, edges, summary, facts, entryPoints, covera
               edges={edges}
               open={open}
               selected={selected}
+              categories={categories}
               category={category}
+              activeRail={activeRail}
               hoveredFile={hoveredFile}
               hoveredNode={hoveredNode}
               onOpen={openNode}
@@ -150,6 +179,9 @@ function ExplorerShell({ fold, files, edges, summary, facts, entryPoints, covera
           edges={edges}
           facts={facts}
           entryPoints={entryPoints}
+          rail={rail}
+          categories={categories}
+          routes={routes}
           owners={owners}
           selection={selected}
           hovered={hovered}

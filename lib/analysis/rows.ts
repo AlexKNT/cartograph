@@ -8,11 +8,19 @@
 
 import { fileName } from "../graph/paths.ts";
 import { extensionOf, moduleOf } from "../parser/paths.ts";
-import type { EdgeKind, ImportEdge, ParsedFile } from "../parser/types.ts";
+import type {
+  EdgeKind,
+  FileRole,
+  ImportEdge,
+  ParsedFile,
+  ParsedRoute,
+} from "../parser/types.ts";
 import type {
   FileRecord,
   NewEdge,
   NewFile,
+  NewRole,
+  NewRoute,
   StoredEdgeKind,
 } from "../supabase/types.ts";
 
@@ -97,6 +105,50 @@ export function edgeRows(
   }
 
   return rows;
+}
+
+/** One role row per file the adapter recognised. The role came from convention. */
+export function roleRows(
+  analysisId: string,
+  organizationId: string,
+  roles: readonly FileRole[],
+  fileIdByPath: ReadonlyMap<string, string>,
+): NewRole[] {
+  return roles.map((role) => {
+    const fileId = fileIdByPath.get(role.file);
+    if (fileId === undefined) {
+      throw new Error(`Role on ${role.file} names a file that was not stored.`);
+    }
+    return {
+      analysis_id: analysisId,
+      organization_id: organizationId,
+      file_id: fileId,
+      role: role.role,
+      source: "convention",
+    };
+  });
+}
+
+/** One route row per route recovered; the path column is the route pattern. */
+export function routeRows(
+  analysisId: string,
+  organizationId: string,
+  routes: readonly ParsedRoute[],
+  fileIdByPath: ReadonlyMap<string, string>,
+): NewRoute[] {
+  return routes.map((route) => {
+    const fileId = fileIdByPath.get(route.file);
+    if (fileId === undefined) {
+      throw new Error(`Route ${route.route} names a file that was not stored.`);
+    }
+    return {
+      analysis_id: analysisId,
+      organization_id: organizationId,
+      file_id: fileId,
+      method: route.method,
+      path: route.route,
+    };
+  });
 }
 
 /**

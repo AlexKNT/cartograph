@@ -49,6 +49,8 @@ export function isParseResult(value: unknown): value is ParseResult {
     "skippedFiles",
     "skippedDirectories",
     "entryPoints",
+    "roles",
+    "routes",
   ].every((key) => {
     if (key === "stats") {
       return hasNumbers(value.stats as Record<string, unknown>, [

@@ -3,14 +3,14 @@
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { CategorySwatch } from "@/components/category-swatch";
 import { PANEL_HEADER_HEIGHT, ROW_HEIGHT } from "@/lib/graph/layout";
-import type { CanvasNode, FileCategory, Hover, Selection } from "@/lib/graph/types";
+import type { CanvasNode, Hover, RailEntry, Selection } from "@/lib/graph/types";
 import { rowHandle } from "@/lib/graph/view";
 
 export interface FolderNodeData extends Record<string, unknown> {
   node: CanvasNode;
   selected: Selection | null;
-  /** The rail's active category, so a match count can be read with its swatch. */
-  activeCategory: FileCategory | null;
+  /** The rail's active entry, so a match count can be read with its swatch. */
+  activeRail: RailEntry | null;
   /** The file the pointer is on, wherever on the screen it is. */
   hoveredFile: string | null;
   /** True when what is hovered lives in this node. */
@@ -56,7 +56,7 @@ function borderOf(selectedHere: boolean, hoveredHere: boolean): string {
 
 /** A folder, folded to a single node or opened into a panel of file rows. */
 export function FolderNode({ data }: NodeProps<FolderFlowNode>) {
-  const { node, selected, activeCategory, hoveredFile, hoveredHere, onHover } = data;
+  const { node, selected, activeRail, hoveredFile, hoveredHere, onHover } = data;
   const { onOpen, onClose, onSelectNode, onSelectFile } = data;
   const selectedHere =
     (selected?.kind === "node" && selected.node === node.id) ||
@@ -71,9 +71,9 @@ export function FolderNode({ data }: NodeProps<FolderFlowNode>) {
   // the counts can be added up against the number the rail shows. A node with
   // no match says nothing: the dimming already says it.
   const match =
-    node.matchCount !== null && node.matchCount > 0 && activeCategory !== null ? (
+    node.matchCount !== null && node.matchCount > 0 && activeRail !== null ? (
       <span className="flex shrink-0 items-center gap-1 font-mono text-[10px] text-muted">
-        <CategorySwatch category={activeCategory} />
+        <CategorySwatch swatch={activeRail.swatch} />
         {node.matchCount}
       </span>
     ) : null;
@@ -155,7 +155,7 @@ export function FolderNode({ data }: NodeProps<FolderFlowNode>) {
                 style={ANCHOR}
                 isConnectable={false}
               />
-              <CategorySwatch category={row.category} />
+              <CategorySwatch swatch={row.swatch} />
               <span className="truncate font-mono text-[11px]">{row.name}</span>
               <Handle
                 id={rowHandle(row.path)}

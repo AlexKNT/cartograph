@@ -6,7 +6,6 @@ import { reRunAnalysis } from "@/lib/actions/analyse";
 import { isStale, isUnfinished } from "@/lib/analysis/progress";
 import { readAnalysis, readGraph, serverNow } from "@/lib/analysis/read";
 import { repositoryName } from "@/lib/analysis/url";
-import { countCategories } from "@/lib/graph/categories";
 import type { CoverageCounts } from "@/lib/graph/coverage";
 import { foldFiles } from "@/lib/graph/fold";
 import type { MapSummary, RepositoryFacts } from "@/lib/graph/types";
@@ -25,7 +24,7 @@ async function mapFor(analysis: AnalysisDetail, repository: string) {
     return <p className="p-4 text-outgoing">Could not read the map: {graph.message}</p>;
   }
 
-  const { files, edges } = graph.value;
+  const { files, edges, roles, routes } = graph.value;
   if (files.length === 0) {
     return (
       <p className="p-4 text-muted">
@@ -43,7 +42,6 @@ async function mapFor(analysis: AnalysisDetail, repository: string) {
     fileCount: files.length,
     nodeCount: fold.nodes.length,
     threshold: fold.threshold,
-    categories: countCategories(files),
   };
 
   const facts: RepositoryFacts = {
@@ -68,9 +66,11 @@ async function mapFor(analysis: AnalysisDetail, repository: string) {
       edges={edges}
       summary={summary}
       facts={facts}
-      // The fallback adapter names no entry points. Framework adapters, and the
-      // paths they know the framework reaches, arrive in a later phase.
+      // Entry points are what the adapter names, and nothing stores them yet,
+      // so the pane has none to take out of its orphan list.
       entryPoints={[]}
+      roles={roles}
+      routes={routes}
       coverage={coverage}
     />
   );

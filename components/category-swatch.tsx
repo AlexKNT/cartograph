@@ -9,11 +9,12 @@ const SWATCH: Record<FileCategory, string> = {
   declaration: "bg-kind-declaration",
 };
 
-export function CategorySwatch({ category }: { category: FileCategory }) {
+export function CategorySwatch({ swatch }: { swatch: FileCategory | null }) {
+  if (swatch === null) return null;
   return (
     <span
       aria-hidden
-      className={`inline-block size-2 shrink-0 rounded-[1px] ${SWATCH[category]}`}
+      className={`inline-block size-2 shrink-0 rounded-[1px] ${SWATCH[swatch]}`}
     />
   );
 }

@@ -5,8 +5,29 @@
  * the browser draws.
  */
 
-/** What sort of file it is, which is the only thing the rail's colours mean. */
+/** The swatch palette, which is the only thing the rail's colours mean. On the
+ *  generic rail these are file kinds; on a framework rail a role draws from the
+ *  same palette, so a colour always has one legend: the rail it appears on. */
 export type FileCategory = "source" | "test" | "barrel" | "declaration";
+
+/** One entry the rail can show. `id` is the role the adapter assigned, or a
+ *  file kind on the generic rail. */
+export interface RailEntry {
+  id: string;
+  /** What the rail says. Concrete, never an abstraction. */
+  label: string;
+  swatch: FileCategory;
+}
+
+/** A rail entry and how many files are under it. */
+export interface CategoryTotal extends RailEntry {
+  count: number;
+}
+
+/** Which rail entry each file belongs to. Built once from the framework and the
+ *  stored roles, then read by everything that colours or filters a file. A file
+ *  with no entry draws no swatch. */
+export type CategoryIndex = ReadonlyMap<string, RailEntry>;
 
 /** Nothing moves on its own, so a selection only ever dims what it didn't reach. */
 export type Strength = "full" | "dim";
@@ -27,7 +48,8 @@ export interface FileRow {
   /** Repository-relative, POSIX separators, and what the row's handle id ends with. */
   path: string;
   name: string;
-  category: FileCategory;
+  /** Null when no rail category claims the file, so it draws no colour. */
+  swatch: FileCategory | null;
   strength: Strength;
 }
 
@@ -68,12 +90,9 @@ export interface CanvasEdge {
   direction: Direction;
 }
 
-export interface CategoryTotal {
-  category: FileCategory;
-  count: number;
-}
-
-/** What the rail says about the repository it is a map of. */
+/** What the rail says about the repository it is a map of. Its categories are
+ *  not here: they come from the taxonomy and the stored roles, so the rail can
+ *  be rebuilt from an adapter's name without the parser. */
 export interface MapSummary {
   repository: string;
   framework: string;
@@ -81,7 +100,6 @@ export interface MapSummary {
   nodeCount: number;
   /** The fold threshold the map settled on; the repository chose it. */
   threshold: number;
-  categories: CategoryTotal[];
 }
 
 /** What the pane says about the repository with nothing selected. Every count
@@ -104,6 +122,8 @@ export interface Canvas {
 export interface CanvasState {
   open: ReadonlySet<string>;
   selected: Selection | null;
-  /** Null when every file is at full strength. */
-  category: FileCategory | null;
+  /** Which rail entry each file belongs to, so the filter has a predicate. */
+  categories: CategoryIndex;
+  /** The rail entry being narrowed to, or null when every file is at full strength. */
+  category: string | null;
 }

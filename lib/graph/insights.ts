@@ -12,8 +12,7 @@
  */
 
 import type { ImportEdge, ParsedFile } from "../parser/types.ts";
-import { categoryOf } from "./categories.ts";
-import type { FileCategory } from "./types.ts";
+import type { CategoryIndex, FileCategory } from "./types.ts";
 
 export type InsightKind = "unimported" | "concentrated" | "cycle" | "long";
 
@@ -58,7 +57,8 @@ export const INSIGHT_LIMIT = 25;
 
 export interface InsightFile {
   path: string;
-  category: FileCategory;
+  /** Null when no rail category claims the file. */
+  swatch: FileCategory | null;
   /** A figure shown beside the path. The sentence stays fixed. */
   note?: string;
 }
@@ -78,10 +78,9 @@ function byPath(left: string, right: string): number {
   return left < right ? -1 : 1;
 }
 
-function entry(path: string, note?: string): InsightFile {
-  return note === undefined
-    ? { path, category: categoryOf(path) }
-    : { path, category: categoryOf(path), note };
+function entry(path: string, index: CategoryIndex, note?: string): InsightFile {
+  const swatch = index.get(path)?.swatch ?? null;
+  return note === undefined ? { path, swatch } : { path, swatch, note };
 }
 
 function fanInCounts(
@@ -178,6 +177,7 @@ export function analyse(
   files: readonly ParsedFile[],
   edges: readonly ImportEdge[],
   entryPoints: readonly string[],
+  index: CategoryIndex,
   limit: number = INSIGHT_LIMIT,
 ): Insight[] {
   const counts = fanInCounts(files, edges);
@@ -219,9 +219,15 @@ export function analyse(
   });
 
   return [
-    build("unimported", unimported.map((path) => entry(path))),
-    build("concentrated", concentrated.map(([path, count]) => entry(path, `${count}`))),
-    build("cycle", cycles.map((path) => entry(path))),
-    build("long", long.map((file) => entry(file.path, `${file.lines} lines`))),
+    build("unimported", unimported.map((path) => entry(path, index))),
+    build(
+      "concentrated",
+      concentrated.map(([path, count]) => entry(path, index, `${count}`)),
+    ),
+    build("cycle", cycles.map((path) => entry(path, index))),
+    build(
+      "long",
+      long.map((file) => entry(file.path, index, `${file.lines} lines`)),
+    ),
   ];
 }

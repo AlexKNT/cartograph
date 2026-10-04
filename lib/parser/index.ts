@@ -1,13 +1,21 @@
 import { createHash } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
 import { basename, resolve } from "node:path";
-import { FALLBACK_ADAPTER, type RepositoryAdapter } from "./adapters/index.ts";
+import { detectAdapter } from "./adapters/detect.ts";
+import type { RepositoryAdapter } from "./adapters/index.ts";
 import { buildEdges, summariseCoverage, withFanCounts, type FileFacts } from "./graph.ts";
 import { createImportProject, readImportStatements, type ImportStatement } from "./parse-imports.ts";
 import { hasSourceExtension } from "./paths.ts";
 import { readResolutionHints } from "./resolution-hints.ts";
 import { resolveImport, type RepositoryIndex } from "./resolve.ts";
-import type { ParseResult, ParseStats, SeenImport, SkipReason } from "./types.ts";
+import type {
+  FileRole,
+  ParseResult,
+  ParseStats,
+  ParsedRoute,
+  SeenImport,
+  SkipReason,
+} from "./types.ts";
 import { describeFile, walkRepository, type WalkResult } from "./walk.ts";
 
 function errorMessage(error: unknown): string {
@@ -98,7 +106,7 @@ function buildIndex(walk: WalkResult, nodes: ReadonlySet<string>): RepositoryInd
  */
 export function parseRepository(
   directory: string,
-  adapter: RepositoryAdapter = FALLBACK_ADAPTER,
+  adapter?: RepositoryAdapter,
 ): ParseResult {
   const root = resolve(directory);
   const rootStats = statSync(root, { throwIfNoEntry: false });
@@ -107,12 +115,19 @@ export function parseRepository(
   }
 
   const walk = walkRepository(root);
-  const entryPoints = addEntryPoints(adapter.entryPoints(), root, walk);
+  const chosen = adapter ?? detectAdapter(root, walk.files.map((file) => file.path));
+  const entryPoints = addEntryPoints(
+    chosen.entryPoints(walk.files.map((file) => file.path)),
+    root,
+    walk,
+  );
   const hints = readResolutionHints(root);
   const project = createImportProject();
 
   const facts: FileFacts[] = [];
   const read: { from: string; statements: ImportStatement[] }[] = [];
+  const roles: FileRole[] = [];
+  const routes: ParsedRoute[] = [];
 
   for (const file of walk.files) {
     let content: Buffer;
@@ -128,6 +143,14 @@ export function parseRepository(
     }
 
     const text = content.toString("utf8");
+
+    const role = chosen.roleOf({ path: file.path, text });
+    if (role !== null) roles.push({ file: file.path, role });
+
+    for (const route of chosen.routesOf({ path: file.path, text })) {
+      routes.push({ file: file.path, method: route.method, route: route.route });
+    }
+
     facts.push({
       path: file.path,
       name: file.name,
@@ -165,6 +188,32 @@ export function parseRepository(
   const files = withFanCounts(facts, edges);
   const coverage = summariseCoverage(imports);
 
+  roles.sort((left, right) =>
+    left.file === right.file
+      ? left.role < right.role
+        ? -1
+        : 1
+      : left.file < right.file
+        ? -1
+        : 1,
+  );
+
+  // Two decorators can spell the same route (`@Get()` and `@Get("/")`). The row
+  // they would write is the same row, and the unique index keeps one of them,
+  // so the duplicate is removed here rather than failing the insert.
+  const routeKeys = new Set<string>();
+  const uniqueRoutes = routes.filter((route) => {
+    const key = `${route.file}\u0000${route.route}\u0000${route.method ?? ""}`;
+    if (routeKeys.has(key)) return false;
+    routeKeys.add(key);
+    return true;
+  });
+  uniqueRoutes.sort((left, right) => {
+    if (left.file !== right.file) return left.file < right.file ? -1 : 1;
+    if (left.route !== right.route) return left.route < right.route ? -1 : 1;
+    return (left.method ?? "") < (right.method ?? "") ? -1 : 1;
+  });
+
   const skippedByReason: Record<SkipReason, number> = {
     "unsupported-extension": 0,
     symlink: 0,
@@ -199,8 +248,10 @@ export function parseRepository(
   };
 
   return {
-    repository: { name: basename(root), root, framework: adapter.name },
+    repository: { name: basename(root), root, framework: chosen.name },
     entryPoints,
+    roles,
+    routes: uniqueRoutes,
     stats,
     files,
     edges,

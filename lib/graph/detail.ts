@@ -9,8 +9,7 @@
  */
 
 import type { ImportEdge, ParsedFile } from "../parser/types.ts";
-import { categoryOf } from "./categories.ts";
-import type { FileCategory } from "./types.ts";
+import type { CategoryIndex, FileCategory } from "./types.ts";
 
 /** How many files the resting pane names as the ones others lean on. */
 export const LEAN_LIMIT = 10;
@@ -18,7 +17,8 @@ export const LEAN_LIMIT = 10;
 /** A file as one of the pane's lists names it. */
 export interface FileRef {
   path: string;
-  category: FileCategory;
+  /** Null when no rail category claims the file. */
+  swatch: FileCategory | null;
 }
 
 export interface RankedFile extends FileRef {
@@ -28,7 +28,9 @@ export interface RankedFile extends FileRef {
 /** Everything the pane shows about the selected file. */
 export interface FileDetail {
   path: string;
-  category: FileCategory;
+  swatch: FileCategory | null;
+  /** The rail entry's label — what kind of file it is — or null. */
+  label: string | null;
   lines: number;
   /** What it imports, in path order. */
   dependsOn: string[];
@@ -50,14 +52,15 @@ function byPath(left: string, right: string): number {
   return left < right ? -1 : 1;
 }
 
-function fileRef(path: string): FileRef {
-  return { path, category: categoryOf(path) };
+function fileRef(path: string, index: CategoryIndex): FileRef {
+  return { path, swatch: index.get(path)?.swatch ?? null };
 }
 
 export function fileDetail(
   path: string,
   files: readonly ParsedFile[],
   edges: readonly ImportEdge[],
+  index: CategoryIndex,
 ): FileDetail | null {
   const file = files.find((candidate) => candidate.path === path);
   if (file === undefined) return null;
@@ -70,9 +73,11 @@ export function fileDetail(
     else if (edge.to === path) dependents.add(edge.from);
   }
 
+  const entry = index.get(file.path);
   return {
     path: file.path,
-    category: categoryOf(file.path),
+    swatch: entry?.swatch ?? null,
+    label: entry?.label ?? null,
     lines: file.lines,
     dependsOn: [...dependsOn].sort(byPath),
     dependents: [...dependents].sort(byPath),
@@ -83,6 +88,7 @@ export function overview(
   files: readonly ParsedFile[],
   edges: readonly ImportEdge[],
   entryPoints: readonly string[],
+  index: CategoryIndex,
   limit: number = LEAN_LIMIT,
 ): Overview {
   const fanIn = new Map<string, number>();
@@ -104,13 +110,13 @@ export function overview(
       rightCount === leftCount ? byPath(leftPath, rightPath) : rightCount - leftCount,
     )
     .slice(0, limit)
-    .map(([path, count]) => ({ ...fileRef(path), fanIn: count }));
+    .map(([path, count]) => ({ ...fileRef(path, index), fanIn: count }));
 
   const unimported = entries
     .filter(([path, count]) => count === 0 && !reached.has(path))
     .map(([path]) => path)
     .sort(byPath)
-    .map(fileRef);
+    .map((path) => fileRef(path, index));
 
   return { lean, unimported };
 }

@@ -10,11 +10,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { coverageCounts } from "../graph/coverage.ts";
 import { parseRepository } from "../parser/index.ts";
-import type { ImportEdge, ParsedFile } from "../parser/types.ts";
+import type { FileRole, ImportEdge, ParsedFile, ParsedRoute } from "../parser/types.ts";
 import { createServerSupabaseClient } from "../supabase/server.ts";
-import type { NewEdge } from "../supabase/types.ts";
+import type { NewEdge, NewRole, NewRoute } from "../supabase/types.ts";
 import { createWorkspace, fetchRepository, removeWorkspace } from "./fetch.ts";
-import { edgeRows, fileRows } from "./rows.ts";
+import { edgeRows, fileRows, roleRows, routeRows } from "./rows.ts";
 import type { RunStage } from "./progress.ts";
 import type { RepositoryRef } from "./url.ts";
 
@@ -98,6 +98,38 @@ async function storeEdges(
   }
 }
 
+async function storeRoles(
+  supabase: SupabaseClient,
+  analysisId: string,
+  organizationId: string,
+  roles: readonly FileRole[],
+  idByPath: ReadonlyMap<string, string>,
+): Promise<void> {
+  const rows: NewRole[] = roleRows(analysisId, organizationId, roles, idByPath);
+
+  for (let index = 0; index < rows.length; index += INSERT_CHUNK) {
+    const chunk = rows.slice(index, index + INSERT_CHUNK);
+    const { error } = await supabase.from("file_roles").insert(chunk);
+    if (error !== null) throw new Error(`Could not store file roles: ${error.message}`);
+  }
+}
+
+async function storeRoutes(
+  supabase: SupabaseClient,
+  analysisId: string,
+  organizationId: string,
+  routes: readonly ParsedRoute[],
+  idByPath: ReadonlyMap<string, string>,
+): Promise<void> {
+  const rows: NewRoute[] = routeRows(analysisId, organizationId, routes, idByPath);
+
+  for (let index = 0; index < rows.length; index += INSERT_CHUNK) {
+    const chunk = rows.slice(index, index + INSERT_CHUNK);
+    const { error } = await supabase.from("routes").insert(chunk);
+    if (error !== null) throw new Error(`Could not store routes: ${error.message}`);
+  }
+}
+
 /**
  * Records the failure and why. If even that write fails there is nothing left
  * to do but say so: the dashboard's stale marker is what covers a row that
@@ -169,6 +201,8 @@ export async function runAnalysis(input: RunInput): Promise<void> {
       parsed.files,
     );
     await storeEdges(supabase, input.analysisId, input.organizationId, parsed.edges, idByPath);
+    await storeRoles(supabase, input.analysisId, input.organizationId, parsed.roles, idByPath);
+    await storeRoutes(supabase, input.analysisId, input.organizationId, parsed.routes, idByPath);
 
     const coverage = coverageCounts(parsed.coverage);
     const { error } = await supabase
@@ -181,6 +215,7 @@ export async function runAnalysis(input: RunInput): Promise<void> {
         commit_sha: fetched.commitSha,
         file_count: parsed.stats.filesParsed,
         edge_count: parsed.stats.edges,
+        route_count: parsed.routes.length,
         imports_seen: coverage.seen,
         imports_resolved: coverage.resolved,
         imports_unresolved: coverage.unresolved,

@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { categoryIndex, railCounts, railFor } from "../lib/graph/rail.ts";
 import { parseRepository } from "../lib/parser/index.ts";
 import { readParseResultModule, toTypedModule } from "../lib/parser/serialize.ts";
 import type { CoverageGroup, ParseResult, SeenImport } from "../lib/parser/types.ts";
@@ -105,6 +106,17 @@ function printReport(result: ParseResult): void {
     "re-exports",
     `${count(stats.reExportsSeen)} seen, ${count(stats.reExportsResolved)} resolved`,
   );
+
+  const categories = categoryIndex(
+    repository.framework,
+    result.files,
+    new Map(result.roles.map((role) => [role.file, role.role])),
+  );
+  const categoriesLine = railCounts(railFor(repository.framework), categories)
+    .map((total) => `${total.label} ${count(total.count)}`)
+    .join("   ");
+  if (categoriesLine !== "") label("categories", categoriesLine);
+  label("routes", count(result.routes.length));
 
   printGroups("unresolved imports", coverage.unresolvedByReason);
   printGroups("excluded imports", coverage.excludedByReason);

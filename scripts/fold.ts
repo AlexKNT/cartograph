@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { countCategories } from "../lib/graph/categories.ts";
 import { FOLD_TARGET_NODES, foldFiles } from "../lib/graph/fold.ts";
+import { categoryIndex, railCounts, railFor } from "../lib/graph/rail.ts";
 import { buildCanvas } from "../lib/graph/view.ts";
 import { readParseResultModule } from "../lib/parser/serialize.ts";
 
@@ -35,6 +35,13 @@ async function main(): Promise<void> {
 
   const fold = foldFiles(parsed.files, parsed.edges);
 
+  const rail = railFor(parsed.repository.framework);
+  const categories = categoryIndex(
+    parsed.repository.framework,
+    parsed.files,
+    new Map(parsed.roles.map((role) => [role.file, role.role])),
+  );
+
   const sizes = fold.nodes.map((node) => node.files.length);
   const smallest = sizes.length === 0 ? 0 : Math.min(...sizes);
   const largest = sizes.length === 0 ? 0 : Math.max(...sizes);
@@ -56,8 +63,8 @@ async function main(): Promise<void> {
   label("node edges", count(fold.edges.length));
   label(
     "categories",
-    countCategories(parsed.files)
-      .map((total) => `${total.category} ${count(total.count)}`)
+    railCounts(rail, categories)
+      .map((total) => `${total.label} ${count(total.count)}`)
       .join("   "),
   );
 
@@ -66,6 +73,7 @@ async function main(): Promise<void> {
   const state = {
     open: new Set(fold.nodes.slice(0, 2).map((node) => node.id)),
     selected: { kind: "node" as const, node: fold.nodes[0]?.id ?? "" },
+    categories,
     category: null,
   };
   const drawn = JSON.stringify(buildCanvas(fold, parsed.edges, state));

@@ -7,7 +7,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ImportEdge, ParsedFile } from "../parser/types.ts";
 import { createServerSupabaseClient } from "../supabase/server.ts";
-import type { AnalysisDetail, EdgeRecord, FileRecord } from "../supabase/types.ts";
+import type {
+  AnalysisDetail,
+  EdgeRecord,
+  FileRecord,
+  RoleRecord,
+  RouteRecord,
+  StoredRoute,
+} from "../supabase/types.ts";
 import { parsedEdges, parsedFiles, type PathEdge } from "./rows.ts";
 
 /** A read that names something by id: it can also come back with nothing there. */
@@ -96,6 +103,49 @@ async function readEdgeRows(
   }
 }
 
+async function readRoleRows(
+  supabase: SupabaseClient,
+  analysisId: string,
+): Promise<RoleRecord[]> {
+  const rows: RoleRecord[] = [];
+
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("file_roles")
+      .select("file_id, role")
+      .eq("analysis_id", analysisId)
+      .order("file_id")
+      .range(from, from + PAGE - 1)
+      .overrideTypes<RoleRecord[], { merge: false }>();
+
+    if (error !== null) throw new Error(error.message);
+    rows.push(...data);
+    if (data.length < PAGE) return rows;
+  }
+}
+
+async function readRouteRows(
+  supabase: SupabaseClient,
+  analysisId: string,
+): Promise<RouteRecord[]> {
+  const rows: RouteRecord[] = [];
+
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("routes")
+      .select("file_id, method, path")
+      .eq("analysis_id", analysisId)
+      .order("path")
+      .order("method")
+      .range(from, from + PAGE - 1)
+      .overrideTypes<RouteRecord[], { merge: false }>();
+
+    if (error !== null) throw new Error(error.message);
+    rows.push(...data);
+    if (data.length < PAGE) return rows;
+  }
+}
+
 /** A row that is not a uuid is a URL nobody could have meant, not a query. */
 export async function readAnalysis(id: string): Promise<RecordLoad<AnalysisDetail>> {
   if (!UUID.test(id)) return { kind: "missing" };
@@ -115,6 +165,10 @@ export async function readAnalysis(id: string): Promise<RecordLoad<AnalysisDetai
 export interface StoredGraph {
   files: ParsedFile[];
   edges: ImportEdge[];
+  /** The convention role of each file, by path. */
+  roles: Record<string, string>;
+  /** Routes recovered exactly, resolved back to file paths. */
+  routes: StoredRoute[];
 }
 
 export async function readGraph(analysis: AnalysisDetail): Promise<ReadLoad<StoredGraph>> {
@@ -123,6 +177,8 @@ export async function readGraph(analysis: AnalysisDetail): Promise<ReadLoad<Stor
   try {
     const fileRows = await readFileRows(supabase, analysis.id);
     const edgeRows = await readEdgeRows(supabase, analysis.id);
+    const roleRows = await readRoleRows(supabase, analysis.id);
+    const routeRows = await readRouteRows(supabase, analysis.id);
 
     const pathById = new Map(fileRows.map((row) => [row.id, row.path]));
     const pathEdges: PathEdge[] = edgeRows.map((row) => {
@@ -134,6 +190,21 @@ export async function readGraph(analysis: AnalysisDetail): Promise<ReadLoad<Stor
         throw new Error(`Edge ${row.from_file_id} -> ${row.to_file_id} names a file that was not read.`);
       }
       return { from, to, kind: row.kind };
+    });
+
+    const roles: Record<string, string> = {};
+    for (const row of roleRows) {
+      const path = pathById.get(row.file_id);
+      // The foreign key makes this impossible; if it happens the read is wrong,
+      // and dropping the role would hide it.
+      if (path === undefined) throw new Error(`Role names a file that was not read.`);
+      roles[path] = row.role;
+    }
+
+    const routes: StoredRoute[] = routeRows.map((row) => {
+      const file = pathById.get(row.file_id);
+      if (file === undefined) throw new Error(`Route names a file that was not read.`);
+      return { file, method: row.method, route: row.path };
     });
 
     const files = parsedFiles(fileRows);
@@ -148,8 +219,11 @@ export async function readGraph(analysis: AnalysisDetail): Promise<ReadLoad<Stor
     if (analysis.edge_count !== null && edges.length !== analysis.edge_count) {
       throw new Error(`Read ${edges.length} of ${analysis.edge_count} edges.`);
     }
+    if (analysis.route_count !== null && routes.length !== analysis.route_count) {
+      throw new Error(`Read ${routes.length} of ${analysis.route_count} routes.`);
+    }
 
-    return { kind: "found", value: { files, edges } };
+    return { kind: "found", value: { files, edges, roles, routes } };
   } catch (error) {
     return {
       kind: "unreadable",
