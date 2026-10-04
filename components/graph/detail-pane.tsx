@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { CategorySwatch } from "@/components/category-swatch";
 import { categoryOf, countPaths } from "@/lib/graph/categories";
 import { fileDetail, overview } from "@/lib/graph/detail";
 import type { Folded, FoldedNode } from "@/lib/graph/fold";
+import { analyse } from "@/lib/graph/insights";
+import { transitiveWalk, WALK_DEPTH, type WalkDirection } from "@/lib/graph/traverse";
 import type { FileCategory, Hover, RepositoryFacts, Selection } from "@/lib/graph/types";
 import type { ImportEdge, ParsedFile } from "@/lib/parser/types";
 
@@ -15,6 +17,8 @@ export interface DetailPaneProps {
   files: readonly ParsedFile[];
   edges: readonly ImportEdge[];
   facts: RepositoryFacts;
+  /** Paths the framework reaches, which the insights treat as not orphaned. */
+  entryPoints: readonly string[];
   /** Which node holds each file, so a hover on a folded node reads as a path. */
   owners: ReadonlyMap<string, string>;
   selection: Selection | null;
@@ -58,6 +62,8 @@ export function DetailPane(props: DetailPaneProps) {
       <div className="min-h-0 flex-1 overflow-y-auto p-2">
         {tab === "explanation" ? <Explanation /> : <Structure {...props} />}
       </div>
+
+      <Insights {...props} />
     </div>
   );
 }
@@ -92,8 +98,11 @@ function isHovered(
 }
 
 function RepositoryStructure(props: DetailPaneProps) {
-  const { facts, files, edges, owners, hovered, onHover, onSelectPath } = props;
-  const { lean, unimported } = useMemo(() => overview(files, edges), [files, edges]);
+  const { facts, files, edges, entryPoints, owners, hovered, onHover, onSelectPath } = props;
+  const { lean, unimported } = useMemo(
+    () => overview(files, edges, entryPoints),
+    [files, edges, entryPoints],
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -143,6 +152,14 @@ function RepositoryStructure(props: DetailPaneProps) {
 function FileStructure(props: DetailPaneProps & { path: string }) {
   const { path, files, edges, owners, hovered, onHover, onSelectPath } = props;
   const detail = useMemo(() => fileDetail(path, files, edges), [path, files, edges]);
+  // One walk, read in two directions. The buttons toggle between them and
+  // between the file's direct neighbours, and the answer is arithmetic over
+  // data already in the browser, so it appears with the click.
+  const [walk, setWalk] = useState<WalkDirection | null>(null);
+  const walked = useMemo(
+    () => (walk === null ? [] : transitiveWalk(path, edges, walk)),
+    [walk, path, edges],
+  );
 
   if (detail === null) {
     return (
@@ -164,26 +181,128 @@ function FileStructure(props: DetailPaneProps & { path: string }) {
         </span>
       </div>
 
-      <Section title="depends on" count={detail.dependsOn.length}>
-        <PathList
-          paths={detail.dependsOn}
-          hovered={hovered}
-          owners={owners}
-          onHover={onHover}
-          onSelect={onSelectPath}
+      <div className="flex gap-1 px-1">
+        <WalkButton
+          label="Blast radius"
+          here={walk === "in"}
+          onClick={() => setWalk(walk === "in" ? null : "in")}
         />
-      </Section>
+        <WalkButton
+          label="Dependency chain"
+          here={walk === "out"}
+          onClick={() => setWalk(walk === "out" ? null : "out")}
+        />
+      </div>
 
-      <Section title="depended on by" count={detail.dependents.length}>
-        <PathList
-          paths={detail.dependents}
+      {walk === null ? (
+        <>
+          <Section title="depends on" count={detail.dependsOn.length}>
+            <PathList
+              paths={detail.dependsOn}
+              hovered={hovered}
+              owners={owners}
+              onHover={onHover}
+              onSelect={onSelectPath}
+            />
+          </Section>
+
+          <Section title="depended on by" count={detail.dependents.length}>
+            <PathList
+              paths={detail.dependents}
+              hovered={hovered}
+              owners={owners}
+              onHover={onHover}
+              onSelect={onSelectPath}
+            />
+          </Section>
+        </>
+      ) : (
+        <WalkResult
+          direction={walk}
+          walked={walked}
           hovered={hovered}
           owners={owners}
           onHover={onHover}
           onSelect={onSelectPath}
         />
-      </Section>
+      )}
     </div>
+  );
+}
+
+function WalkButton({
+  label,
+  here,
+  onClick,
+}: {
+  label: string;
+  here: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-[2px] border px-1.5 py-0.5 text-[11px] ${
+        here ? "border-accent text-accent" : "border-border text-muted hover:text-foreground"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+/** The walk, grouped by how many steps away each file is, so a two-level
+ *  answer stays walkable rather than reading as one flat list. */
+function WalkResult({
+  direction,
+  walked,
+  hovered,
+  owners,
+  onHover,
+  onSelect,
+}: {
+  direction: WalkDirection;
+  walked: readonly { path: string; depth: number }[];
+  hovered: Hover | null;
+  owners: ReadonlyMap<string, string>;
+  onHover: (hover: Hover | null) => void;
+  onSelect: (path: string) => void;
+}) {
+  const title = direction === "in" ? "blast radius" : "dependency chain";
+
+  return (
+    <Section title={title} count={walked.length}>
+      <p className="px-1 text-[11px] text-muted">
+        {direction === "in"
+          ? `Everything that depends on this file, up to ${WALK_DEPTH} steps away.`
+          : `Everything this file needs, up to ${WALK_DEPTH} steps away.`}
+      </p>
+
+      {walked.length === 0 ? (
+        <p className="px-1 font-mono text-[11px] text-muted">nothing</p>
+      ) : (
+        [...new Set(walked.map((entry) => entry.depth))].sort((left, right) => left - right).map(
+          (depth) => {
+            const at = walked.filter((entry) => entry.depth === depth);
+            return (
+              <div key={depth} className="flex flex-col">
+                <span className="px-1 font-mono text-[10px] text-muted">
+                  {depth} step{depth === 1 ? "" : "s"} away
+                </span>
+                <PathList
+                  paths={at.map((entry) => entry.path)}
+                  hovered={hovered}
+                  owners={owners}
+                  onHover={onHover}
+                  onSelect={onSelect}
+                />
+              </div>
+            );
+          },
+        )
+      )}
+    </Section>
   );
 }
 
@@ -220,6 +339,68 @@ function Explanation() {
       Nothing here yet. An explanation is written from what the parser found, and there is no
       call that writes one yet.
     </p>
+  );
+}
+
+/**
+ * Four facts about the edge list, in a panel that starts collapsed. It sits at
+ * the bottom of the pane and is never the first thing anyone sees: this
+ * explains a codebase, it does not grade one. Each kind is one of four fixed
+ * sentences, and nothing here calls a model.
+ */
+function Insights(props: DetailPaneProps) {
+  const { files, edges, entryPoints, owners, hovered, onHover, onSelectPath } = props;
+  const [open, setOpen] = useState(false);
+  const insights = useMemo(
+    () => analyse(files, edges, entryPoints),
+    [files, edges, entryPoints],
+  );
+  const found = insights.reduce((total, insight) => total + insight.total, 0);
+
+  return (
+    <section className="shrink-0 border-t border-border">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center gap-1.5 px-2 py-1 text-left"
+      >
+        <span aria-hidden className="text-[10px] text-muted">
+          {open ? "▾" : "▸"}
+        </span>
+        <span className="flex-1 text-[11px] text-muted">insights</span>
+        <span className="font-mono text-[11px] text-muted">{found}</span>
+      </button>
+
+      {open && (
+        <div className="flex max-h-72 flex-col gap-3 overflow-y-auto border-t border-border p-2">
+          {insights.map((insight) => (
+            <Section key={insight.kind} title={insight.title} count={insight.total}>
+              <p className="px-1 text-[11px] text-muted">{insight.sentence}</p>
+              {insight.files.length === 0 ? (
+                <p className="px-1 font-mono text-[11px] text-muted">nothing</p>
+              ) : (
+                insight.files.map((file) => (
+                  <EntryRow
+                    key={file.path}
+                    path={file.path}
+                    category={file.category}
+                    count={file.note}
+                    hovered={isHovered(hovered, owners, file.path)}
+                    onHover={onHover}
+                    onSelect={onSelectPath}
+                  />
+                ))
+              )}
+              {insight.total > insight.files.length && (
+                <p className="px-1 font-mono text-[11px] text-muted">
+                  {insight.total - insight.files.length} more
+                </p>
+              )}
+            </Section>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -266,7 +447,7 @@ function EntryRow({
 }: {
   path: string;
   category: FileCategory;
-  count?: number;
+  count?: number | string;
   hovered: boolean;
   onHover: (hover: Hover | null) => void;
   onSelect: (path: string) => void;

@@ -11,7 +11,13 @@ import {
 import { DetailPane, type PaneTab } from "@/components/graph/detail-pane";
 import { MapShell } from "@/components/map-shell";
 import { ownerIndex, type Folded } from "@/lib/graph/fold";
-import type { Hover, MapSummary, RepositoryFacts, Selection } from "@/lib/graph/types";
+import type {
+  FileCategory,
+  Hover,
+  MapSummary,
+  RepositoryFacts,
+  Selection,
+} from "@/lib/graph/types";
 import type { ImportEdge, ParsedFile } from "@/lib/parser/types";
 
 export interface ExplorerProps {
@@ -20,6 +26,9 @@ export interface ExplorerProps {
   edges: readonly ImportEdge[];
   summary: MapSummary;
   facts: RepositoryFacts;
+  /** Paths the adapter named as reached by the framework. They are not orphans
+   *  even when nothing imports them, so the insights leave them out. */
+  entryPoints: readonly string[];
 }
 
 /**
@@ -37,12 +46,15 @@ export function Explorer(props: ExplorerProps) {
   );
 }
 
-function ExplorerShell({ fold, files, edges, summary, facts }: ExplorerProps) {
+function ExplorerShell({ fold, files, edges, summary, facts, entryPoints }: ExplorerProps) {
   const { fitView, getZoom } = useReactFlow();
 
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set<string>());
   const [selected, setSelected] = useState<Selection | null>(null);
   const [hovered, setHovered] = useState<Hover | null>(null);
+  // The rail's narrowing is a third kind of emphasis, alongside the selection
+  // and the hover, and it survives both: picking a file does not drop it.
+  const [category, setCategory] = useState<FileCategory | null>(null);
   // The tab belongs to the pane, not to the selection: someone comparing
   // explanations across three files should not reopen it three times.
   const [tab, setTab] = useState<PaneTab>("structure");
@@ -106,13 +118,14 @@ function ExplorerShell({ fold, files, edges, summary, facts }: ExplorerProps) {
 
   return (
     <MapShell
-      rail={<CategoryRail summary={summary} />}
+      rail={<CategoryRail summary={summary} active={category} onCategory={setCategory} />}
       map={
         <DependencyCanvas
           fold={fold}
           edges={edges}
           open={open}
           selected={selected}
+          category={category}
           hoveredFile={hoveredFile}
           hoveredNode={hoveredNode}
           onOpen={openNode}
@@ -127,6 +140,7 @@ function ExplorerShell({ fold, files, edges, summary, facts }: ExplorerProps) {
           files={files}
           edges={edges}
           facts={facts}
+          entryPoints={entryPoints}
           owners={owners}
           selection={selected}
           hovered={hovered}

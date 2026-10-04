@@ -64,6 +64,7 @@ async function main(): Promise<void> {
   const state = {
     open: new Set(fold.nodes.slice(0, 2).map((node) => node.id)),
     selected: { kind: "node" as const, node: fold.nodes[0]?.id ?? "" },
+    category: null,
   };
   const drawn = JSON.stringify(buildCanvas(fold, parsed.edges, state));
   const again = JSON.stringify(buildCanvas(fold, parsed.edges, state));

@@ -45,6 +45,9 @@ export interface CanvasNode {
   rows: FileRow[];
   hiddenRows: number;
   strength: Strength;
+  /** Files here that are in the rail's active category, or null when none is
+   *  active. Every node carries one, so the counts can be added up. */
+  matchCount: number | null;
   /** Deterministic from the label and the dependency count. */
   width: number;
   height: number;
@@ -96,8 +99,11 @@ export interface Canvas {
   edges: CanvasEdge[];
 }
 
-/** The state that isn't in the data: what was opened and what was clicked. */
+/** The state that isn't in the data: what was opened, what was clicked, and
+ *  which category the rail is narrowing the picture to. */
 export interface CanvasState {
   open: ReadonlySet<string>;
   selected: Selection | null;
+  /** Null when every file is at full strength. */
+  category: FileCategory | null;
 }

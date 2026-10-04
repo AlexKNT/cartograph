@@ -11,7 +11,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useMemo } from "react";
 import type { Folded } from "@/lib/graph/fold";
-import type { Hover, Selection } from "@/lib/graph/types";
+import type { FileCategory, Hover, Selection } from "@/lib/graph/types";
 import { buildCanvas } from "@/lib/graph/view";
 import type { ImportEdge } from "@/lib/parser/types";
 import { DependencyEdge, type DependencyFlowEdge } from "./dependency-edge";
@@ -32,6 +32,8 @@ export interface CanvasProps {
   edges: readonly ImportEdge[];
   open: ReadonlySet<string>;
   selected: Selection | null;
+  /** The rail's active category; null when every file is at full strength. */
+  category: FileCategory | null;
   /** The file the pointer is on, from the pane or from the canvas. */
   hoveredFile: string | null;
   /** The node holding whatever is hovered, so a folded node lights up too. */
@@ -51,6 +53,7 @@ export function DependencyCanvas({
   edges,
   open,
   selected,
+  category,
   hoveredFile,
   hoveredNode,
   onOpen,
@@ -61,8 +64,8 @@ export function DependencyCanvas({
   // Layout follows opening and selecting only. A hover changes emphasis, never
   // where anything is, so it must not re-run dagre underneath the pointer.
   const canvas = useMemo(
-    () => buildCanvas(fold, edges, { open, selected }),
-    [fold, edges, open, selected],
+    () => buildCanvas(fold, edges, { open, selected, category }),
+    [fold, edges, open, selected, category],
   );
 
   const nodes = useMemo<Node[]>(
@@ -78,6 +81,7 @@ export function DependencyCanvas({
         data: {
           node,
           selected,
+          activeCategory: category,
           hoveredFile,
           hoveredHere: hoveredNode === node.id,
           onOpen,
@@ -87,7 +91,17 @@ export function DependencyCanvas({
           onHover,
         } satisfies FolderNodeData,
       })),
-    [canvas.nodes, selected, hoveredFile, hoveredNode, onOpen, onClose, onSelect, onHover],
+    [
+      canvas.nodes,
+      selected,
+      category,
+      hoveredFile,
+      hoveredNode,
+      onOpen,
+      onClose,
+      onSelect,
+      onHover,
+    ],
   );
 
   const flowEdges = useMemo<DependencyFlowEdge[]>(

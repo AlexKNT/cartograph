@@ -11,8 +11,8 @@ import { ownerIndex } from "./fold.ts";
 import { MAX_PANEL_ROWS, foldedBox, panelBox, placeNodes, type Box } from "./layout.ts";
 import { uniqueLabels } from "./labels.ts";
 import { fileName } from "./paths.ts";
-import { emphasise } from "./selection.ts";
-import type { Canvas, CanvasEdge, CanvasNode, CanvasState } from "./types.ts";
+import { dimmer, emphasise, emphasiseCategory } from "./selection.ts";
+import type { Canvas, CanvasEdge, CanvasNode, CanvasState, Strength } from "./types.ts";
 
 /** The handle a row's edge attaches to. Open panels connect at the row. */
 export function rowHandle(path: string): string {
@@ -29,6 +29,15 @@ export function buildCanvas(
   const ownerOf = ownerIndex(fold.nodes);
 
   const emphasis = emphasise(state.selected, fold.nodes, fileEdges, ownerOf);
+  const filter =
+    state.category === null ? null : emphasiseCategory(state.category, fold.nodes);
+
+  // Two reasons to dim, and dim wins: a kept node is still dimmed by the rail
+  // when it holds none of the kind the rail is narrowing to.
+  const nodeStrength = (id: string): Strength =>
+    dimmer(emphasis.nodeStrength(id), filter?.nodeStrength(id));
+  const rowStrength = (path: string): Strength =>
+    dimmer(emphasis.rowStrength(path), filter?.rowStrength(path));
 
   // A panel shows what fits and says how many more, rather than growing until
   // it is taller than the thing it is a map of. Rows are in path order, which
@@ -67,10 +76,14 @@ export function buildCanvas(
         path,
         name: fileName(path),
         category: categoryOf(path),
-        strength: emphasis.rowStrength(path),
+        strength: rowStrength(path),
       })),
       hiddenRows: node.files.length - rows.length,
-      strength: emphasis.nodeStrength(node.id),
+      strength: nodeStrength(node.id),
+      matchCount:
+        state.category === null
+          ? null
+          : node.files.filter((file) => categoryOf(file) === state.category).length,
       width: box.width,
       height: box.height,
       x: point.x,
@@ -103,15 +116,16 @@ export function buildCanvas(
     if (drawn.has(key)) continue;
     drawn.add(key);
 
-    const { strength, direction } = emphasis.edgeOf(edge.from, edge.to);
+    const selected = emphasis.edgeOf(edge.from, edge.to);
+    const narrowed = filter?.edgeOf(edge.from, edge.to);
     edges.push({
       id: `${edge.from} -> ${edge.to}`,
       source,
       target,
       sourceHandle,
       targetHandle,
-      strength,
-      direction,
+      strength: dimmer(selected.strength, narrowed?.strength),
+      direction: selected.direction,
     });
   }
 

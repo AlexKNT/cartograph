@@ -40,7 +40,9 @@ export interface FileDetail {
 export interface Overview {
   /** Ordered by how many things import it, most first. */
   lean: RankedFile[];
-  /** Everything nothing imports, in path order: where reading starts. */
+  /** Everything nothing imports, in path order: where reading starts. Files
+   *  the framework reaches are not here, because the import graph was never
+   *  going to show them. */
   unimported: FileRef[];
 }
 
@@ -80,6 +82,7 @@ export function fileDetail(
 export function overview(
   files: readonly ParsedFile[],
   edges: readonly ImportEdge[],
+  entryPoints: readonly string[],
   limit: number = LEAN_LIMIT,
 ): Overview {
   const fanIn = new Map<string, number>();
@@ -93,6 +96,7 @@ export function overview(
   }
 
   const entries = [...fanIn.entries()];
+  const reached = new Set(entryPoints);
 
   const lean = entries
     .filter(([, count]) => count > 0)
@@ -103,7 +107,7 @@ export function overview(
     .map(([path, count]) => ({ ...fileRef(path), fanIn: count }));
 
   const unimported = entries
-    .filter(([, count]) => count === 0)
+    .filter(([path, count]) => count === 0 && !reached.has(path))
     .map(([path]) => path)
     .sort(byPath)
     .map(fileRef);

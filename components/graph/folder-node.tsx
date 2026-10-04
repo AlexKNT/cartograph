@@ -3,12 +3,14 @@
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { CategorySwatch } from "@/components/category-swatch";
 import { PANEL_HEADER_HEIGHT, ROW_HEIGHT } from "@/lib/graph/layout";
-import type { CanvasNode, Hover, Selection } from "@/lib/graph/types";
+import type { CanvasNode, FileCategory, Hover, Selection } from "@/lib/graph/types";
 import { rowHandle } from "@/lib/graph/view";
 
 export interface FolderNodeData extends Record<string, unknown> {
   node: CanvasNode;
   selected: Selection | null;
+  /** The rail's active category, so a match count can be read with its swatch. */
+  activeCategory: FileCategory | null;
   /** The file the pointer is on, wherever on the screen it is. */
   hoveredFile: string | null;
   /** True when what is hovered lives in this node. */
@@ -54,7 +56,7 @@ function borderOf(selectedHere: boolean, hoveredHere: boolean): string {
 
 /** A folder, folded to a single node or opened into a panel of file rows. */
 export function FolderNode({ data }: NodeProps<FolderFlowNode>) {
-  const { node, selected, hoveredFile, hoveredHere, onHover } = data;
+  const { node, selected, activeCategory, hoveredFile, hoveredHere, onHover } = data;
   const { onOpen, onClose, onSelectNode, onSelectFile } = data;
   const selectedHere =
     (selected?.kind === "node" && selected.node === node.id) ||
@@ -65,6 +67,17 @@ export function FolderNode({ data }: NodeProps<FolderFlowNode>) {
   const hoverNode = () => onHover({ kind: "node", node: node.id });
   const hoverNone = () => onHover(null);
 
+  // Every node with a match carries its count when the rail is narrowing, so
+  // the counts can be added up against the number the rail shows. A node with
+  // no match says nothing: the dimming already says it.
+  const match =
+    node.matchCount !== null && node.matchCount > 0 && activeCategory !== null ? (
+      <span className="flex shrink-0 items-center gap-1 font-mono text-[10px] text-muted">
+        <CategorySwatch category={activeCategory} />
+        {node.matchCount}
+      </span>
+    ) : null;
+
   if (!node.expanded) {
     return (
       <div
@@ -73,10 +86,13 @@ export function FolderNode({ data }: NodeProps<FolderFlowNode>) {
         onMouseLeave={hoverNone}
         title={node.id}
         style={{ width: node.width, height: node.height }}
-        className={`${INTERACTIVE} flex cursor-pointer items-center justify-center rounded-[3px] border bg-surface px-2 ${borderOf(selectedHere, hoveredHere)} ${dimmed(node.strength)}`}
+        className={`${INTERACTIVE} flex cursor-pointer items-center gap-1 rounded-[3px] border bg-surface px-2 ${borderOf(selectedHere, hoveredHere)} ${dimmed(node.strength)}`}
       >
         <Handle type="target" position={Position.Left} style={ANCHOR} isConnectable={false} />
-        <span className="truncate font-mono text-[11px]">{node.label}</span>
+        <span className="min-w-0 flex-1 truncate text-center font-mono text-[11px]">
+          {node.label}
+        </span>
+        {match}
         <Handle type="source" position={Position.Right} style={ANCHOR} isConnectable={false} />
       </div>
     );
@@ -100,8 +116,9 @@ export function FolderNode({ data }: NodeProps<FolderFlowNode>) {
         className="flex shrink-0 cursor-pointer items-center gap-2 border-b border-border px-2 text-left"
       >
         <span className="truncate font-mono text-[11px]">{node.label}</span>
-        <span className="ml-auto shrink-0 font-mono text-[11px] text-muted">
-          {node.fileCount} files
+        <span className="ml-auto flex shrink-0 items-center gap-2">
+          {match}
+          <span className="font-mono text-[11px] text-muted">{node.fileCount} files</span>
         </span>
         <span className="shrink-0 font-mono text-[11px] text-muted">
           in {node.fanIn} · out {node.fanOut}

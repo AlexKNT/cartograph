@@ -37,6 +37,7 @@ export default function PreviewPage() {
         edges={parsed.edges}
         summary={summary}
         facts={facts}
+        entryPoints={parsed.entryPoints}
       />
     </div>
   );
