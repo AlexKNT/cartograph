@@ -45,7 +45,7 @@ export function serverNow(): number {
 const ANALYSIS_COLUMNS =
   "id, status, stage, stage_message, error_stage, error_message, commit_sha, framework, " +
   "file_count, edge_count, route_count, imports_seen, imports_resolved, imports_unresolved, " +
-  "imports_pruned, started_at, finished_at, created_at, project:projects ( repo_url )";
+  "imports_pruned, started_at, finished_at, created_at, project:projects ( repo_url, default_branch )";
 
 const FILE_COLUMNS = "id, path, directory, lines, content_hash, bytes, fan_in, fan_out";
 
@@ -224,6 +224,172 @@ export async function readGraph(analysis: AnalysisDetail): Promise<ReadLoad<Stor
     }
 
     return { kind: "found", value: { files, edges, roles, routes } };
+  } catch (error) {
+    return {
+      kind: "unreadable",
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/** One thing a file is connected to, and how. */
+export interface Neighbour {
+  path: string;
+  kinds: string[];
+}
+
+/** A file's place in the graph: the row, and every neighbour on both sides. */
+export interface FileSubject {
+  id: string;
+  path: string;
+  lines: number;
+  contentHash: string;
+  role: string | null;
+  /** What it imports, in path order. */
+  imports: Neighbour[];
+  /** What imports it, in path order. */
+  importers: Neighbour[];
+}
+
+/** PostgREST answers with a bounded URL, so an `in` list is sent in chunks. */
+const NAME_CHUNK = 200;
+
+async function pathsFor(
+  supabase: SupabaseClient,
+  ids: readonly string[],
+): Promise<Map<string, string>> {
+  const paths = new Map<string, string>();
+
+  for (let index = 0; index < ids.length; index += NAME_CHUNK) {
+    const chunk = ids.slice(index, index + NAME_CHUNK);
+    const { data, error } = await supabase
+      .from("files")
+      .select("id, path")
+      .in("id", chunk)
+      .overrideTypes<{ id: string; path: string }[], { merge: false }>();
+
+    if (error !== null) throw new Error(`Could not read the neighbouring files: ${error.message}`);
+    for (const row of data) paths.set(row.id, row.path);
+  }
+
+  return paths;
+}
+
+/**
+ * One side of a file's edges, paged for the same reason the whole-graph read
+ * is: PostgREST bounds a response, and a hub file's neighbours can pass that.
+ */
+async function readNeighbourEdges(
+  supabase: SupabaseClient,
+  analysisId: string,
+  side: "imports" | "importers",
+  fileId: string,
+): Promise<{ other: string; kind: string }[]> {
+  const column = side === "imports" ? "from_file_id" : "to_file_id";
+  const rows: { other: string; kind: string }[] = [];
+
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("edges")
+      .select("from_file_id, to_file_id, kind")
+      .eq("analysis_id", analysisId)
+      .eq(column, fileId)
+      .order("from_file_id")
+      .order("to_file_id")
+      .order("kind")
+      .range(from, from + PAGE - 1)
+      .overrideTypes<
+        { from_file_id: string; to_file_id: string; kind: string }[],
+        { merge: false }
+      >();
+
+    if (error !== null) throw new Error(`Could not read the edges: ${error.message}`);
+    for (const row of data) {
+      rows.push({
+        other: side === "imports" ? row.to_file_id : row.from_file_id,
+        kind: row.kind,
+      });
+    }
+    if (data.length < PAGE) return rows;
+  }
+}
+
+/** The edges gathered into one entry per neighbour, in path order. */
+function neighbours(
+  edges: readonly { other: string; kind: string }[],
+  pathById: ReadonlyMap<string, string>,
+): Neighbour[] {
+  const kinds = new Map<string, Set<string>>();
+
+  for (const edge of edges) {
+    const path = pathById.get(edge.other);
+    // The foreign keys make this impossible; if it happens the read is wrong,
+    // and dropping the neighbour would hide it.
+    if (path === undefined) throw new Error("An edge names a file that was not read.");
+    const set = kinds.get(path);
+    if (set === undefined) kinds.set(path, new Set([edge.kind]));
+    else set.add(edge.kind);
+  }
+
+  return [...kinds.entries()]
+    .map(([path, set]) => ({ path, kinds: [...set].sort() }))
+    .sort((left, right) => (left.path < right.path ? -1 : 1));
+}
+
+/**
+ * What explaining one file needs, and no more: the row, its role, and both
+ * directions of its edges named by path. Reading the whole graph for a click
+ * would make a cached explanation as slow as the first one.
+ */
+export async function readFileSubject(
+  analysisId: string,
+  path: string,
+): Promise<RecordLoad<FileSubject>> {
+  const supabase = createServerSupabaseClient();
+
+  try {
+    const { data: file, error } = await supabase
+      .from("files")
+      .select("id, path, lines, content_hash")
+      .eq("analysis_id", analysisId)
+      .eq("path", path)
+      .maybeSingle()
+      .overrideTypes<
+        { id: string; path: string; lines: number; content_hash: string },
+        { merge: false }
+      >();
+
+    if (error !== null) return { kind: "unreadable", message: error.message };
+    if (file === null) return { kind: "missing" };
+
+    const outgoing = await readNeighbourEdges(supabase, analysisId, "imports", file.id);
+    const incoming = await readNeighbourEdges(supabase, analysisId, "importers", file.id);
+
+    const pathById = await pathsFor(supabase, [
+      ...new Set([...outgoing, ...incoming].map((edge) => edge.other)),
+    ]);
+
+    const { data: role, error: roleError } = await supabase
+      .from("file_roles")
+      .select("role")
+      .eq("file_id", file.id)
+      .maybeSingle()
+      .overrideTypes<{ role: string }, { merge: false }>();
+
+    if (roleError !== null) return { kind: "unreadable", message: roleError.message };
+
+    return {
+      kind: "found",
+      value: {
+        id: file.id,
+        path: file.path,
+        lines: file.lines,
+        contentHash: file.content_hash,
+        role: role?.role ?? null,
+        imports: neighbours(outgoing, pathById),
+        importers: neighbours(incoming, pathById),
+      },
+    };
   } catch (error) {
     return {
       kind: "unreadable",

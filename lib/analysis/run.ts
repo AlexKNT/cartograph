@@ -1,5 +1,5 @@
 /**
- * One run: fetch, select, parse, store.
+ * One run: fetch, select, parse, store, label.
  *
  * Server side, and the only place the pipeline exists. It is not a queue and
  * has no worker — the request that started it is still holding it — so the one
@@ -8,6 +8,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { classifyFiles } from "../ai/classify.ts";
 import { coverageCounts } from "../graph/coverage.ts";
 import { parseRepository } from "../parser/index.ts";
 import type { FileRole, ImportEdge, ParsedFile, ParsedRoute } from "../parser/types.ts";
@@ -130,6 +131,61 @@ async function storeRoutes(
   }
 }
 
+interface Unidentified {
+  id: string;
+  path: string;
+}
+
+/**
+ * Labelling the files the framework's conventions did not identify.
+ *
+ * The map is complete and true without a label — a file simply draws no colour
+ * — so a model that is unreachable, out of quota or unconfigured leaves the run
+ * finished rather than failed. What the model actually answered is in front of
+ * the reader either way: the rail counts what each role holds, and a file the
+ * model declined shows no role rather than a guessed one.
+ */
+async function labelUnidentified(
+  supabase: SupabaseClient,
+  analysisId: string,
+  organizationId: string,
+  framework: string,
+  files: readonly ParsedFile[],
+  identified: ReadonlySet<string>,
+  idByPath: ReadonlyMap<string, string>,
+): Promise<void> {
+  // The generic rail names every file by its path already, and it is what a
+  // repository no adapter matched draws with. There is nothing there for a
+  // model to add that the rail is not already saying.
+  if (framework === "none") return;
+
+  const unlabelled: Unidentified[] = [];
+  for (const file of files) {
+    if (identified.has(file.path)) continue;
+    const id = idByPath.get(file.path);
+    if (id !== undefined) unlabelled.push({ id, path: file.path });
+  }
+  if (unlabelled.length === 0) return;
+
+  await setStage(
+    supabase,
+    analysisId,
+    "label",
+    `labelling ${count(unlabelled.length)} files no adapter identified`,
+  );
+
+  try {
+    const result = await classifyFiles({ analysisId, organizationId, files: unlabelled });
+    if (result.skipped > 0) {
+      console.error(
+        `Analysis ${analysisId}: labelled ${result.labelled} of ${result.asked} files.`,
+      );
+    }
+  } catch (error) {
+    console.error(`Analysis ${analysisId}: could not label files: ${errorText(error)}`);
+  }
+}
+
 /**
  * Records the failure and why. If even that write fails there is nothing left
  * to do but say so: the dashboard's stale marker is what covers a row that
@@ -203,6 +259,17 @@ export async function runAnalysis(input: RunInput): Promise<void> {
     await storeEdges(supabase, input.analysisId, input.organizationId, parsed.edges, idByPath);
     await storeRoles(supabase, input.analysisId, input.organizationId, parsed.roles, idByPath);
     await storeRoutes(supabase, input.analysisId, input.organizationId, parsed.routes, idByPath);
+
+    stage = "label";
+    await labelUnidentified(
+      supabase,
+      input.analysisId,
+      input.organizationId,
+      parsed.repository.framework,
+      parsed.files,
+      new Set(parsed.roles.map((role) => role.file)),
+      idByPath,
+    );
 
     const coverage = coverageCounts(parsed.coverage);
     const { error } = await supabase

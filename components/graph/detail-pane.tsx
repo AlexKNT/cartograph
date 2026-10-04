@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { CategorySwatch } from "@/components/category-swatch";
+import { ExplanationPane, type ExplanationState } from "@/components/graph/explanation";
 import { fileDetail, overview } from "@/lib/graph/detail";
 import type { Folded, FoldedNode } from "@/lib/graph/fold";
 import { analyse } from "@/lib/graph/insights";
@@ -21,6 +22,8 @@ import type { StoredRoute } from "@/lib/supabase/types";
 export type PaneTab = "structure" | "routes" | "explanation";
 
 export interface DetailPaneProps {
+  /** The run every explanation here is written against. */
+  analysisId: string;
   fold: Folded;
   files: readonly ParsedFile[];
   edges: readonly ImportEdge[];
@@ -39,6 +42,13 @@ export interface DetailPaneProps {
   hovered: Hover | null;
   tab: PaneTab;
   onTab: (tab: PaneTab) => void;
+  /** What the selected subject's explanation came to, once it was asked for. */
+  explanation: ExplanationState | null;
+  onExplain: (selection: Selection) => void;
+  /** False when LangSmith has no key, which the tab says out loud. */
+  tracing: boolean;
+  /** Every path in the repository, so a path in prose can become a link. */
+  paths: ReadonlySet<string>;
   onSelectPath: (path: string) => void;
   onHover: (hover: Hover | null) => void;
 }
@@ -75,7 +85,17 @@ export function DetailPane(props: DetailPaneProps) {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-2">
-        {tab === "explanation" && <Explanation />}
+        {tab === "explanation" && (
+          <ExplanationPane
+            analysisId={props.analysisId}
+            selection={props.selection}
+            state={props.explanation}
+            tracing={props.tracing}
+            paths={props.paths}
+            onExplain={props.onExplain}
+            onSelectPath={props.onSelectPath}
+          />
+        )}
         {tab === "routes" && <RouteTable {...props} />}
         {tab === "structure" && <Structure {...props} />}
       </div>
@@ -422,17 +442,6 @@ function RouteTable(props: DetailPaneProps) {
         })}
       </div>
     </Section>
-  );
-}
-
-/** Nothing fills this until there is a model call to fill it with, and the
- *  empty state says so rather than pretending to be loading. */
-function Explanation() {
-  return (
-    <p className="px-1 text-[11px] text-muted">
-      Nothing here yet. An explanation is written from what the parser found, and there is no
-      call that writes one yet.
-    </p>
   );
 }
 

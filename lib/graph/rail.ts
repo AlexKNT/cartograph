@@ -46,9 +46,46 @@ const FRAMEWORK_RAILS: Readonly<Record<string, readonly RailEntry[]>> = {
   ],
 };
 
-/** The rail a framework presents, or the generic one when nothing matched. */
+/**
+ * The roles a model may assign to a file no framework convention identified.
+ *
+ * Structural roles are deliberately absent: page, route and controller decide
+ * routing and the entry-point colouring, and convention owns them. A model
+ * naming one of those would let it write the route table by prose.
+ *
+ * The swatches agree with the framework rails that already use the same role —
+ * a NestJS service, a React component and a hook keep the colour they had —
+ * and the rest share the four hues rather than asking for a fifth.
+ */
+export const CLASSIFIED_ROLES: readonly RailEntry[] = [
+  { id: "service", label: "Services", swatch: "barrel" },
+  { id: "repository", label: "Repositories", swatch: "declaration" },
+  { id: "model", label: "Models", swatch: "test" },
+  { id: "util", label: "Utilities", swatch: "source" },
+  { id: "config", label: "Config", swatch: "declaration" },
+  { id: "component", label: "Components", swatch: "source" },
+  { id: "hook", label: "Hooks", swatch: "barrel" },
+];
+
+/** The identifiers the classifier may answer with. */
+export const CLASSIFIABLE_ROLE_IDS: readonly string[] = CLASSIFIED_ROLES.map(
+  (entry) => entry.id,
+);
+
+/**
+ * The rail a framework presents, or the generic one when nothing matched.
+ *
+ * A framework rail is a role taxonomy, so the classified roles follow the
+ * framework's own layers in reading order. The generic rail is a path taxonomy
+ * and names every file already, so nothing is missing there to label and the
+ * classified roles do not join it.
+ */
 export function railFor(framework: string): readonly RailEntry[] {
-  return FRAMEWORK_RAILS[framework] ?? GENERIC_RAIL;
+  const frameworkRail = FRAMEWORK_RAILS[framework];
+  if (frameworkRail === undefined) return GENERIC_RAIL;
+
+  const taken = new Set(frameworkRail.map((entry) => entry.id));
+  return [...frameworkRail, ...CLASSIFIED_ROLES.filter((entry) => !taken.has(entry.id))];
 }
 
 /**
@@ -73,7 +110,7 @@ export function categoryIndex(
     return index;
   }
 
-  const byId = new Map(rail.map((entry) => [entry.id, entry]));
+  const byId = new Map(railFor(framework).map((entry) => [entry.id, entry]));
   for (const file of files) {
     const role = roles.get(file.path);
     if (role === undefined) continue;

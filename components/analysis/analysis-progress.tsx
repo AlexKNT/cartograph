@@ -11,7 +11,7 @@ export interface AnalysisProgressProps {
 }
 
 /**
- * The run, named stage by stage. Four stages rather than a spinner, because
+ * The run, named stage by stage. Five stages rather than a spinner, because
  * "reading imports" and "writing rows" are different waits and only the second
  * one is nearly over.
  */

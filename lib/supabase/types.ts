@@ -48,7 +48,9 @@ export type AnalysisDetail = {
   started_at: string | null;
   finished_at: string | null;
   created_at: string;
-  project: { repo_url: string } | null;
+  // The branch the run read, kept so a later explanation can ask GitHub for the
+  // head of that branch rather than for the repository's default twice.
+  project: { repo_url: string; default_branch: string | null } | null;
 };
 
 /** The `edges.kind` check constraint's vocabulary. */

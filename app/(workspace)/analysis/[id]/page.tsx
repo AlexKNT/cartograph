@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AnalysisProgressView } from "@/components/analysis/analysis-progress";
 import { Explorer } from "@/components/graph/explorer";
+import { tracingConfigured } from "@/lib/ai/client";
 import { reRunAnalysis } from "@/lib/actions/analyse";
 import { isStale, isUnfinished } from "@/lib/analysis/progress";
 import { readAnalysis, readGraph, serverNow } from "@/lib/analysis/read";
@@ -61,6 +62,8 @@ async function mapFor(analysis: AnalysisDetail, repository: string) {
 
   return (
     <Explorer
+      analysisId={analysis.id}
+      tracing={tracingConfigured()}
       fold={fold}
       files={files}
       edges={edges}

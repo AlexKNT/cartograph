@@ -31,7 +31,12 @@ function countLines(text: string): number {
   return text.endsWith("\n") ? breaks : breaks + 1;
 }
 
-function hashOf(content: Buffer): string {
+/**
+ * The content hash, exported because something outside the parser now compares
+ * against it: whether a file has changed since the run that read it. One
+ * definition, so "the same file" cannot mean two different things.
+ */
+export function contentHashOf(content: Buffer): string {
   return createHash("sha256").update(content).digest("hex");
 }
 
@@ -159,7 +164,7 @@ export function parseRepository(
       module: file.module,
       lines: countLines(text),
       bytes: content.byteLength,
-      hash: hashOf(content),
+      hash: contentHashOf(content),
     });
     read.push({ from: file.path, statements: readImportStatements(project, file.path, text) });
   }

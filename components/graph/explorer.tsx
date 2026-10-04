@@ -10,7 +10,12 @@ import {
 } from "@/components/graph/dependency-canvas";
 import { CoverageBanner } from "@/components/graph/coverage-banner";
 import { DetailPane, type PaneTab } from "@/components/graph/detail-pane";
+import {
+  explanationKey,
+  type ExplanationState,
+} from "@/components/graph/explanation";
 import { MapShell } from "@/components/map-shell";
+import { explainSubject } from "@/lib/actions/explain";
 import type { CoverageCounts } from "@/lib/graph/coverage";
 import { ownerIndex, type Folded } from "@/lib/graph/fold";
 import { categoryIndex, railCounts, railFor } from "@/lib/graph/rail";
@@ -19,6 +24,10 @@ import type { ImportEdge, ParsedFile } from "@/lib/parser/types";
 import type { StoredRoute } from "@/lib/supabase/types";
 
 export interface ExplorerProps {
+  /** The run this map is of, which is what an explanation names. */
+  analysisId: string;
+  /** False when LangSmith has no key, which the Explanation tab says out loud. */
+  tracing: boolean;
   fold: Folded;
   files: readonly ParsedFile[];
   edges: readonly ImportEdge[];
@@ -51,6 +60,8 @@ export function Explorer(props: ExplorerProps) {
 }
 
 function ExplorerShell({
+  analysisId,
+  tracing,
   fold,
   files,
   edges,
@@ -82,6 +93,12 @@ function ExplorerShell({
   // The tab belongs to the pane, not to the selection: someone comparing
   // explanations across three files should not reopen it three times.
   const [tab, setTab] = useState<PaneTab>("structure");
+
+  // What has been explained, kept by subject. This is what makes moving the
+  // selection away and back free: the paragraph is here, not in a request.
+  const [explanations, setExplanations] = useState<ReadonlyMap<string, ExplanationState>>(
+    () => new Map<string, ExplanationState>(),
+  );
 
   /** The zoom a refit may not exceed. Null when nothing waits to be fitted. */
   const zoomCeiling = useRef<number | null>(null);
@@ -132,6 +149,43 @@ function ExplorerShell({
     return () => cancelAnimationFrame(frame);
   }, [open, fitView]);
 
+  /** Every path the repository has, which is what a path in prose is matched against. */
+  const paths = useMemo(() => new Set(files.map((file) => file.path)), [files]);
+
+  /**
+   * Asking for an explanation is the one thing in this pane that is not already
+   * in the browser, and it is always a real call: the answer is kept here for
+   * the next visit to the subject, but the button asks again.
+   */
+  const explain = useCallback(
+    (target: Selection) => {
+      const key = explanationKey(target);
+      const kind = target.kind === "file" ? "file" : "folder";
+      const subject = target.kind === "file" ? target.path : target.node;
+
+      const settle = (outcome: ExplanationState): void => {
+        setExplanations((current) => new Map(current).set(key, outcome));
+      };
+
+      settle({ kind: "working" });
+      void explainSubject(analysisId, kind, subject)
+        .then((outcome) => settle({ kind: "done", outcome }))
+        .catch((error: unknown) => {
+          settle({
+            kind: "done",
+            outcome: {
+              status: "failed",
+              message: error instanceof Error ? error.message : String(error),
+            },
+          });
+        });
+    },
+    [analysisId],
+  );
+
+  const explanation =
+    selected === null ? null : (explanations.get(explanationKey(selected)) ?? null);
+
   const hoveredFile = hovered !== null && hovered.kind === "file" ? hovered.path : null;
   const hoveredNode =
     hovered === null
@@ -174,6 +228,7 @@ function ExplorerShell({
       }
       pane={
         <DetailPane
+          analysisId={analysisId}
           fold={fold}
           files={files}
           edges={edges}
@@ -187,6 +242,10 @@ function ExplorerShell({
           hovered={hovered}
           tab={tab}
           onTab={setTab}
+          explanation={explanation}
+          onExplain={explain}
+          tracing={tracing}
+          paths={paths}
           onSelectPath={selectPath}
           onHover={setHovered}
         />

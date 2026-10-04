@@ -5,7 +5,7 @@ import type { AnalysisStatus } from "../supabase/types.ts";
  * the pipeline rather than about the repository, which is why the `stage`
  * column is free text and why these live in application code.
  */
-export const RUN_STAGES = ["fetch", "select", "parse", "store"] as const;
+export const RUN_STAGES = ["fetch", "select", "parse", "store", "label"] as const;
 
 export type RunStage = (typeof RUN_STAGES)[number];
 

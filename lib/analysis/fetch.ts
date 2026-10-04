@@ -3,8 +3,8 @@
  *
  * No token is sent and no scope is requested: the archive endpoint serves
  * public repositories to anyone, so there is nothing to store and nothing to
- * leak. GitHub's anonymous rate limit applies to the two metadata calls, and
- * what it says when it refuses is passed through rather than replaced.
+ * leak. GitHub's anonymous rate limit applies to the metadata calls, and what
+ * it says when it refuses is passed through rather than replaced.
  *
  * Nothing here knows about the parser, the database or the interface: it takes
  * a reference and a directory and puts files in it.
@@ -18,6 +18,8 @@ import type { RepositoryRef } from "./url.ts";
 
 const API = "https://api.github.com";
 const ARCHIVE = "https://codeload.github.com";
+/** Serves file bytes at a commit, which is not the API and not rate limited. */
+const RAW = "https://raw.githubusercontent.com";
 
 /** GitHub rejects a request without one. */
 const USER_AGENT = "cartograph";
@@ -157,4 +159,55 @@ export async function fetchRepository(
   });
 
   return { commitSha: head.commitSha, defaultBranch: head.defaultBranch, files };
+}
+
+/**
+ * The commit at the head of the repository right now, for judging whether a run
+ * still describes it. The default branch is stored with the project, so this is
+ * one call when it is known and two when it is not.
+ *
+ * This goes through the API, which allows an anonymous caller sixty requests an
+ * hour. One per explanation is within that; a page explaining twenty files in a
+ * row is not, and GitHub saying so is reported rather than swallowed.
+ */
+export async function headCommit(ref: RepositoryRef, branch: string | null): Promise<string> {
+  if (branch === null || branch === "") {
+    return (await headOf(ref)).commitSha;
+  }
+
+  const subject = `${ref.owner}/${ref.repo}`;
+  const commits = await readJson(
+    `/repos/${ref.owner}/${ref.repo}/commits?sha=${encodeURIComponent(branch)}&per_page=1`,
+    subject,
+  );
+  const head: unknown = Array.isArray(commits) ? commits[0] : undefined;
+  const sha = fieldOf(head, "sha");
+  if (typeof sha !== "string" || sha === "") {
+    throw new Error(`GitHub did not name a commit on ${subject}.`);
+  }
+  return sha;
+}
+
+/**
+ * One file's bytes as they are at a commit, or null when the repository has no
+ * such file there. Read through the raw host rather than the API, so checking a
+ * file does not spend the request budget the API calls need.
+ */
+export async function fileBytesAt(
+  ref: RepositoryRef,
+  sha: string,
+  path: string,
+): Promise<Buffer | null> {
+  const encoded = path.split("/").map(encodeURIComponent).join("/");
+  const url = `${RAW}/${ref.owner}/${ref.repo}/${sha}/${encoded}`;
+  const response = await fetch(url, {
+    headers: { "user-agent": USER_AGENT },
+    cache: "no-store",
+  });
+
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(`GitHub returned ${response.status} for ${path}.`);
+  }
+  return Buffer.from(await response.arrayBuffer());
 }
