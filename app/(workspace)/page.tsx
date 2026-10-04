@@ -1,68 +1,11 @@
 import { auth } from "@clerk/nextjs/server";
+import { AnalyseForm } from "@/components/analysis/analyse-form";
+import { AnalysisTable } from "@/components/analysis/analysis-table";
+import { serverNow } from "@/lib/analysis/read";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { AnalysisSummary } from "@/lib/supabase/types";
 
-// A paste-a-URL form belongs here, but there is nothing behind it to call yet,
-// so this page stays a list until there is.
 const LIST_LIMIT = 50;
-
-const ABSENT = "—";
-
-// The repository URL is GitHub and stored in canonical form, so the display
-// name is a subtraction rather than a parse that can throw.
-function repositoryName(repoUrl: string): string {
-  return repoUrl.replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "");
-}
-
-// UTC, fixed width, no locale: the same row reads the same everywhere.
-function timestamp(value: string | null): string {
-  return value === null ? ABSENT : value.slice(0, 16).replace("T", " ");
-}
-
-// The palette carries one accent and one warning end. On this screen they mean
-// live and failed — there are no edges here for direction to collide with.
-function state(analysis: AnalysisSummary): { text: string; className: string } {
-  switch (analysis.status) {
-    case "failed":
-      return { text: "failed", className: "text-outgoing" };
-    case "running":
-      return {
-        text: analysis.stage === null ? "running" : `running · ${analysis.stage}`,
-        className: "text-accent",
-      };
-    default:
-      return { text: analysis.status, className: "text-muted" };
-  }
-}
-
-function AnalysisRow({ analysis }: { analysis: AnalysisSummary }) {
-  const { text, className } = state(analysis);
-  // A failed run says where it stopped, and a live one says how far it has got.
-  // Both belong on the row; neither belongs in a tooltip.
-  const detail = analysis.error_message ?? analysis.stage_message;
-
-  return (
-    <tr className="align-baseline">
-      <td className="border-b border-border py-1 pr-4 font-mono">
-        {analysis.project === null ? ABSENT : repositoryName(analysis.project.repo_url)}
-      </td>
-      <td className={`border-b border-border py-1 pr-4 font-mono ${className}`}>{text}</td>
-      <td className="border-b border-border py-1 pr-4 text-right font-mono text-muted">
-        {analysis.file_count ?? ABSENT}
-      </td>
-      <td className="border-b border-border py-1 pr-4 text-right font-mono text-muted">
-        {analysis.edge_count ?? ABSENT}
-      </td>
-      <td className="border-b border-border py-1 pr-4 text-right font-mono text-muted">
-        {analysis.route_count ?? ABSENT}
-      </td>
-      <td className="border-b border-border py-1 font-mono text-muted">
-        {timestamp(analysis.created_at)}
-        {detail !== null && <span className="ml-2">{detail}</span>}
-      </td>
-    </tr>
-  );
-}
 
 export default async function DashboardPage() {
   // Read from the session token, not from the browser: the identity provider is
@@ -97,6 +40,8 @@ export default async function DashboardPage() {
   }
 
   const analyses = data ?? [];
+  // One clock for the whole list, so every row is judged against the same moment.
+  const now = serverNow();
 
   return (
     <div className="p-4">
@@ -105,29 +50,17 @@ export default async function DashboardPage() {
         <span className="font-mono text-[11px] text-muted">{analyses.length}</span>
       </header>
 
+      <div className="mt-3">
+        <AnalyseForm />
+      </div>
+
       {analyses.length === 0 ? (
         <p className="mt-3 text-muted">
-          This team hasn&apos;t mapped a repository yet. Nothing is listed until one has been
-          analysed.
+          This team hasn&apos;t mapped a repository yet. Paste the URL of a public repository
+          and it will be fetched and parsed.
         </p>
       ) : (
-        <table className="mt-3 w-full border-collapse text-left">
-          <thead>
-            <tr className="text-[11px] text-muted">
-              <th className="border-b border-border py-1 pr-4 font-normal">repository</th>
-              <th className="border-b border-border py-1 pr-4 font-normal">state</th>
-              <th className="border-b border-border py-1 pr-4 text-right font-normal">files</th>
-              <th className="border-b border-border py-1 pr-4 text-right font-normal">edges</th>
-              <th className="border-b border-border py-1 pr-4 text-right font-normal">routes</th>
-              <th className="border-b border-border py-1 font-normal">started</th>
-            </tr>
-          </thead>
-          <tbody>
-            {analyses.map((analysis) => (
-              <AnalysisRow key={analysis.id} analysis={analysis} />
-            ))}
-          </tbody>
-        </table>
+        <AnalysisTable analyses={analyses} now={now} />
       )}
     </div>
   );

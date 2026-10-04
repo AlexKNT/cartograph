@@ -8,8 +8,10 @@ import {
   FIT_PADDING,
   MAX_ZOOM,
 } from "@/components/graph/dependency-canvas";
+import { CoverageBanner } from "@/components/graph/coverage-banner";
 import { DetailPane, type PaneTab } from "@/components/graph/detail-pane";
 import { MapShell } from "@/components/map-shell";
+import type { CoverageCounts } from "@/lib/graph/coverage";
 import { ownerIndex, type Folded } from "@/lib/graph/fold";
 import type {
   FileCategory,
@@ -29,6 +31,8 @@ export interface ExplorerProps {
   /** Paths the adapter named as reached by the framework. They are not orphans
    *  even when nothing imports them, so the insights leave them out. */
   entryPoints: readonly string[];
+  /** What the run recorded about the imports it saw, for the banner. */
+  coverage: CoverageCounts;
 }
 
 /**
@@ -46,7 +50,7 @@ export function Explorer(props: ExplorerProps) {
   );
 }
 
-function ExplorerShell({ fold, files, edges, summary, facts, entryPoints }: ExplorerProps) {
+function ExplorerShell({ fold, files, edges, summary, facts, entryPoints, coverage }: ExplorerProps) {
   const { fitView, getZoom } = useReactFlow();
 
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set<string>());
@@ -120,19 +124,24 @@ function ExplorerShell({ fold, files, edges, summary, facts, entryPoints }: Expl
     <MapShell
       rail={<CategoryRail summary={summary} active={category} onCategory={setCategory} />}
       map={
-        <DependencyCanvas
-          fold={fold}
-          edges={edges}
-          open={open}
-          selected={selected}
-          category={category}
-          hoveredFile={hoveredFile}
-          hoveredNode={hoveredNode}
-          onOpen={openNode}
-          onClose={closeNode}
-          onSelect={setSelected}
-          onHover={setHovered}
-        />
+        <div className="flex h-full min-h-0 flex-col">
+          <CoverageBanner counts={coverage} />
+          <div className="min-h-0 flex-1">
+            <DependencyCanvas
+              fold={fold}
+              edges={edges}
+              open={open}
+              selected={selected}
+              category={category}
+              hoveredFile={hoveredFile}
+              hoveredNode={hoveredNode}
+              onOpen={openNode}
+              onClose={closeNode}
+              onSelect={setSelected}
+              onHover={setHovered}
+            />
+          </div>
+        </div>
       }
       pane={
         <DetailPane

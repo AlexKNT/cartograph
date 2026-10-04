@@ -5,14 +5,13 @@ import { FOLD_TARGET_NODES, foldFiles } from "../lib/graph/fold.ts";
 import { buildCanvas } from "../lib/graph/view.ts";
 import { readParseResultModule } from "../lib/parser/serialize.ts";
 
-const DEFAULT_DATA = "lib/preview/mobx.ts";
-
 const USAGE = `cartograph fold — fold a parse result the way the canvas does, and count it
 
-  node scripts/fold.ts [file.ts]
+  node scripts/parse.ts <directory> --out <file.ts>
+  node scripts/fold.ts <file.ts>
 
-Folds the parse result (default: ${DEFAULT_DATA}) into canvas nodes and prints
-the numbers the map has to satisfy. Exits non-zero if one of them fails.`;
+Folds the parse result into canvas nodes and prints the numbers the map has to
+satisfy. Exits non-zero if one of them fails.`;
 
 const count = (value: number): string => value.toLocaleString("en-US");
 
@@ -27,7 +26,10 @@ async function main(): Promise<void> {
     return;
   }
 
-  const dataPath = resolve(args[0] ?? DEFAULT_DATA);
+  if (args[0] === undefined) {
+    throw new Error("Give it a parse result: node scripts/fold.ts <file.ts>");
+  }
+  const dataPath = resolve(args[0]);
   const loaded: unknown = await import(pathToFileURL(dataPath).href);
   const parsed = readParseResultModule(loaded, dataPath);
 
