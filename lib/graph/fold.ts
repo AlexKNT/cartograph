@@ -40,6 +40,15 @@ export interface Folded {
   edges: FoldedEdge[];
 }
 
+/** Which node holds each file. One index, read by the canvas and the pane. */
+export function ownerIndex(nodes: readonly FoldedNode[]): Map<string, string> {
+  const owner = new Map<string, string>();
+  for (const node of nodes) {
+    for (const file of node.files) owner.set(file, node.id);
+  }
+  return owner;
+}
+
 interface Directory {
   path: string;
   parent: string | null;

@@ -31,11 +31,11 @@ export function categoryOf(path: string): FileCategory {
   return "source";
 }
 
-/** Files per category, in the fixed order. Empty categories are left out. */
-export function countCategories(files: readonly ParsedFile[]): CategoryTotal[] {
+/** Files per category for a plain list of paths, in the fixed order. */
+export function countPaths(paths: readonly string[]): CategoryTotal[] {
   const counts = new Map<FileCategory, number>();
-  for (const file of files) {
-    const category = categoryOf(file.path);
+  for (const path of paths) {
+    const category = categoryOf(path);
     counts.set(category, (counts.get(category) ?? 0) + 1);
   }
 
@@ -43,4 +43,9 @@ export function countCategories(files: readonly ParsedFile[]): CategoryTotal[] {
     category,
     count: counts.get(category) ?? 0,
   }));
+}
+
+/** Files per category, in the fixed order. Empty categories are left out. */
+export function countCategories(files: readonly ParsedFile[]): CategoryTotal[] {
+  return countPaths(files.map((file) => file.path));
 }

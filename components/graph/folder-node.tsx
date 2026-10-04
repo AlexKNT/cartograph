@@ -3,16 +3,21 @@
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { CategorySwatch } from "@/components/category-swatch";
 import { PANEL_HEADER_HEIGHT, ROW_HEIGHT } from "@/lib/graph/layout";
-import type { CanvasNode, Selection } from "@/lib/graph/types";
+import type { CanvasNode, Hover, Selection } from "@/lib/graph/types";
 import { rowHandle } from "@/lib/graph/view";
 
 export interface FolderNodeData extends Record<string, unknown> {
   node: CanvasNode;
   selected: Selection | null;
+  /** The file the pointer is on, wherever on the screen it is. */
+  hoveredFile: string | null;
+  /** True when what is hovered lives in this node. */
+  hoveredHere: boolean;
   onOpen: (id: string) => void;
   onClose: (id: string) => void;
   onSelectNode: (id: string) => void;
-  onSelectFile: (id: string, path: string) => void;
+  onSelectFile: (path: string) => void;
+  onHover: (hover: Hover | null) => void;
 }
 
 export type FolderFlowNode = Node<FolderNodeData, "folder">;
@@ -39,22 +44,36 @@ function dimmed(strength: CanvasNode["strength"]): string {
   return strength === "dim" ? "opacity-30" : "";
 }
 
+/** Selected is the accent, hovered is the same accent lighter: one hue, two
+ *  strengths, so a hover can never be read as a selection. */
+function borderOf(selectedHere: boolean, hoveredHere: boolean): string {
+  if (selectedHere) return "border-accent";
+  if (hoveredHere) return "border-accent/60";
+  return "border-border";
+}
+
 /** A folder, folded to a single node or opened into a panel of file rows. */
 export function FolderNode({ data }: NodeProps<FolderFlowNode>) {
-  const { node, selected, onOpen, onClose, onSelectNode, onSelectFile } = data;
+  const { node, selected, hoveredFile, hoveredHere, onHover } = data;
+  const { onOpen, onClose, onSelectNode, onSelectFile } = data;
   const selectedHere =
     (selected?.kind === "node" && selected.node === node.id) ||
     (selected?.kind === "file" && node.rows.some((row) => row.path === selected.path));
+
+  // The panel answers for the whole node, and a row answers over the top of
+  // it: leaving a row is still being inside the node.
+  const hoverNode = () => onHover({ kind: "node", node: node.id });
+  const hoverNone = () => onHover(null);
 
   if (!node.expanded) {
     return (
       <div
         onClick={() => onOpen(node.id)}
+        onMouseEnter={hoverNode}
+        onMouseLeave={hoverNone}
         title={node.id}
         style={{ width: node.width, height: node.height }}
-        className={`${INTERACTIVE} flex cursor-pointer items-center justify-center rounded-[3px] border bg-surface px-2 ${
-          selectedHere ? "border-accent" : "border-border"
-        } ${dimmed(node.strength)}`}
+        className={`${INTERACTIVE} flex cursor-pointer items-center justify-center rounded-[3px] border bg-surface px-2 ${borderOf(selectedHere, hoveredHere)} ${dimmed(node.strength)}`}
       >
         <Handle type="target" position={Position.Left} style={ANCHOR} isConnectable={false} />
         <span className="truncate font-mono text-[11px]">{node.label}</span>
@@ -65,10 +84,10 @@ export function FolderNode({ data }: NodeProps<FolderFlowNode>) {
 
   return (
     <div
+      onMouseEnter={hoverNode}
+      onMouseLeave={hoverNone}
       style={{ width: node.width, height: node.height }}
-      className={`${INTERACTIVE} flex flex-col overflow-hidden rounded-[3px] border bg-surface ${
-        selectedHere ? "border-accent" : "border-border"
-      } ${dimmed(node.strength)}`}
+      className={`${INTERACTIVE} flex flex-col overflow-hidden rounded-[3px] border bg-surface ${borderOf(selectedHere, hoveredHere)} ${dimmed(node.strength)}`}
     >
       <Handle type="target" position={Position.Left} style={ANCHOR} isConnectable={false} />
       <Handle type="source" position={Position.Right} style={ANCHOR} isConnectable={false} />
@@ -92,17 +111,24 @@ export function FolderNode({ data }: NodeProps<FolderFlowNode>) {
       <div className="flex-1 overflow-hidden" onClick={() => onSelectNode(node.id)}>
         {node.rows.map((row) => {
           const rowSelected = selected?.kind === "file" && selected.path === row.path;
+          const rowHovered = hoveredFile === row.path;
           return (
             <div
               key={row.path}
               onClick={(event) => {
                 event.stopPropagation();
-                onSelectFile(node.id, row.path);
+                onSelectFile(row.path);
               }}
+              onMouseEnter={() => onHover({ kind: "file", path: row.path })}
+              onMouseLeave={hoverNode}
               title={row.path}
               style={{ height: ROW_HEIGHT }}
               className={`relative flex cursor-pointer items-center gap-1.5 px-2 ${
-                rowSelected ? "bg-accent/10 text-accent" : "hover:bg-background"
+                rowSelected
+                  ? "bg-accent/10 text-accent"
+                  : rowHovered
+                    ? "bg-accent/10"
+                    : "hover:bg-background"
               } ${dimmed(row.strength)}`}
             >
               <Handle

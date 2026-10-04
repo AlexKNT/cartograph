@@ -7,6 +7,7 @@
 import type { ImportEdge } from "../parser/types.ts";
 import { categoryOf } from "./categories.ts";
 import type { Folded } from "./fold.ts";
+import { ownerIndex } from "./fold.ts";
 import { MAX_PANEL_ROWS, foldedBox, panelBox, placeNodes, type Box } from "./layout.ts";
 import { uniqueLabels } from "./labels.ts";
 import { fileName } from "./paths.ts";
@@ -25,10 +26,7 @@ export function buildCanvas(
 ): Canvas {
   const labels = uniqueLabels(fold.nodes.map((node) => node.id));
 
-  const ownerOf = new Map<string, string>();
-  for (const node of fold.nodes) {
-    for (const file of node.files) ownerOf.set(file, node.id);
-  }
+  const ownerOf = ownerIndex(fold.nodes);
 
   const emphasis = emphasise(state.selected, fold.nodes, fileEdges, ownerOf);
 

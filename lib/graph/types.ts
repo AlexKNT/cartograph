@@ -16,7 +16,12 @@ export type Direction = "in" | "out" | "none";
 
 export type Selection =
   | { kind: "node"; node: string }
-  | { kind: "file"; node: string; path: string };
+  | { kind: "file"; path: string };
+
+/** What the pointer is on. The same two things a click can land on, and like a
+ *  selection it only ever changes emphasis — but it is never kept, and nothing
+ *  is derived that outlives the pointer leaving. */
+export type Hover = Selection;
 
 export interface FileRow {
   /** Repository-relative, POSIX separators, and what the row's handle id ends with. */
@@ -74,6 +79,16 @@ export interface MapSummary {
   /** The fold threshold the map settled on; the repository chose it. */
   threshold: number;
   categories: CategoryTotal[];
+}
+
+/** What the pane says about the repository with nothing selected. Every count
+ *  is one the parser produced; the interface derives none of them. */
+export interface RepositoryFacts {
+  repository: string;
+  framework: string;
+  fileCount: number;
+  importCount: number;
+  edgeCount: number;
 }
 
 export interface Canvas {

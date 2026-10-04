@@ -4,16 +4,14 @@ import {
   Background,
   BackgroundVariant,
   ReactFlow,
-  ReactFlowProvider,
-  useReactFlow,
   type EdgeTypes,
   type Node,
   type NodeTypes,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 import type { Folded } from "@/lib/graph/fold";
-import type { Selection } from "@/lib/graph/types";
+import type { Hover, Selection } from "@/lib/graph/types";
 import { buildCanvas } from "@/lib/graph/view";
 import type { ImportEdge } from "@/lib/parser/types";
 import { DependencyEdge, type DependencyFlowEdge } from "./dependency-edge";
@@ -24,64 +22,48 @@ import { FolderNode, type FolderNodeData } from "./folder-node";
 const nodeTypes: NodeTypes = { folder: FolderNode };
 const edgeTypes: EdgeTypes = { dependency: DependencyEdge };
 
-const FIT_PADDING = 0.1;
+export const FIT_PADDING = 0.1;
 
 /** React Flow's ceiling, and the cap on what a refit is allowed to do. */
-const MAX_ZOOM = 2;
+export const MAX_ZOOM = 2;
 
-interface CanvasProps {
+export interface CanvasProps {
   fold: Folded;
   edges: readonly ImportEdge[];
+  open: ReadonlySet<string>;
+  selected: Selection | null;
+  /** The file the pointer is on, from the pane or from the canvas. */
+  hoveredFile: string | null;
+  /** The node holding whatever is hovered, so a folded node lights up too. */
+  hoveredNode: string | null;
+  onOpen: (id: string) => void;
+  onClose: (id: string) => void;
+  onSelect: (selection: Selection | null) => void;
+  onHover: (hover: Hover | null) => void;
 }
 
-export function DependencyCanvas({ fold, edges }: CanvasProps) {
-  return (
-    <ReactFlowProvider>
-      <Canvas fold={fold} edges={edges} />
-    </ReactFlowProvider>
-  );
-}
-
-function Canvas({ fold, edges }: CanvasProps) {
-  const { fitView, getZoom } = useReactFlow();
-
-  const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set<string>());
-  const [selected, setSelected] = useState<Selection | null>(null);
-
-  /** The zoom a refit may not exceed. Null when nothing is waiting to be fitted. */
-  const zoomCeiling = useRef<number | null>(null);
-
+/**
+ * The canvas is a view: what is open, what is selected and what is hovered all
+ * arrive as props, because the detail pane reads the same three.
+ */
+export function DependencyCanvas({
+  fold,
+  edges,
+  open,
+  selected,
+  hoveredFile,
+  hoveredNode,
+  onOpen,
+  onClose,
+  onSelect,
+  onHover,
+}: CanvasProps) {
+  // Layout follows opening and selecting only. A hover changes emphasis, never
+  // where anything is, so it must not re-run dagre underneath the pointer.
   const canvas = useMemo(
     () => buildCanvas(fold, edges, { open, selected }),
     [fold, edges, open, selected],
   );
-
-  const openNode = useCallback(
-    (id: string) => {
-      // Read before the state changes: a refit must zoom out at most, and
-      // fitting against the zoom it replaced is what keeps that true.
-      zoomCeiling.current = Math.min(getZoom(), MAX_ZOOM);
-      setOpen((current) => new Set(current).add(id));
-      setSelected({ kind: "node", node: id });
-    },
-    [getZoom],
-  );
-
-  const closeNode = useCallback((id: string) => {
-    setOpen((current) => {
-      const next = new Set(current);
-      next.delete(id);
-      return next;
-    });
-  }, []);
-
-  const selectNode = useCallback((id: string) => {
-    setSelected({ kind: "node", node: id });
-  }, []);
-
-  const selectFile = useCallback((id: string, path: string) => {
-    setSelected({ kind: "file", node: id, path });
-  }, []);
 
   const nodes = useMemo<Node[]>(
     () =>
@@ -96,13 +78,16 @@ function Canvas({ fold, edges }: CanvasProps) {
         data: {
           node,
           selected,
-          onOpen: openNode,
-          onClose: closeNode,
-          onSelectNode: selectNode,
-          onSelectFile: selectFile,
+          hoveredFile,
+          hoveredHere: hoveredNode === node.id,
+          onOpen,
+          onClose,
+          onSelectNode: (id: string) => onSelect({ kind: "node", node: id }),
+          onSelectFile: (path: string) => onSelect({ kind: "file", path }),
+          onHover,
         } satisfies FolderNodeData,
       })),
-    [canvas.nodes, selected, openNode, closeNode, selectNode, selectFile],
+    [canvas.nodes, selected, hoveredFile, hoveredNode, onOpen, onClose, onSelect, onHover],
   );
 
   const flowEdges = useMemo<DependencyFlowEdge[]>(
@@ -119,18 +104,6 @@ function Canvas({ fold, edges }: CanvasProps) {
     [canvas.edges],
   );
 
-  useEffect(() => {
-    const ceiling = zoomCeiling.current;
-    if (ceiling === null) return;
-    zoomCeiling.current = null;
-
-    // A frame later, so the panel that just opened has a size to fit against.
-    const frame = requestAnimationFrame(() => {
-      void fitView({ padding: FIT_PADDING, maxZoom: ceiling, duration: 0 });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [open, fitView]);
-
   return (
     <ReactFlow
       nodes={nodes}
@@ -145,7 +118,7 @@ function Canvas({ fold, edges }: CanvasProps) {
       fitViewOptions={{ padding: FIT_PADDING }}
       minZoom={0.4}
       maxZoom={MAX_ZOOM}
-      onPaneClick={() => setSelected(null)}
+      onPaneClick={() => onSelect(null)}
     >
       <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="var(--border)" />
     </ReactFlow>
