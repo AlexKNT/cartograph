@@ -23,6 +23,9 @@ dist/
 .agents/
 skills-lock.json
 
+# Standalone Deep Agents quickstart (its own package.json)
+deep-agent/
+
 # Supabase CLI local state
 .supabase/
 supabase/.temp/
