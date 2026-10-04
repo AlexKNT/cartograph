@@ -1,6 +1,13 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-const isPublicRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"]);
+// The agent's tools surface is public to this middleware on purpose: the agent
+// has no session of its own, and the request authenticates with the signed
+// credential the app minted instead. The route is the only thing that reads it.
+const isPublicRoute = createRouteMatcher([
+  "/sign-in(.*)",
+  "/sign-up(.*)",
+  "/api/agent/tools",
+]);
 
 export default clerkMiddleware(async (auth, req) => {
   // The login screens finish their own business, including the session task

@@ -6,6 +6,7 @@
  * wrote, and the role check needs nothing but the parser.
  */
 import { filePrompt, type FileFacts } from "../ai/prompts.ts";
+import { recentTurns, scoreTurns, turnUrl, type CheckedTurn } from "./agent.ts";
 import { evalClient, tracingProject } from "./client.ts";
 import { findInventedPaths, pathTokens } from "./invented-paths.ts";
 import { runPromptVersions } from "./prompt-versions.ts";
@@ -18,6 +19,8 @@ const USAGE = `cartograph evals — the checks that turn "is this any good" into
   node scripts/evals.ts invented-paths --demo        splice in a fake path and catch it
   node scripts/evals.ts roles                        role accuracy over the held-out fixture
   node scripts/evals.ts prompts [--limit N]          two explanation prompts, side by side
+  node scripts/evals.ts agent [--limit N]            did the agent look, and did it talk about itself
+  node scripts/evals.ts agent --demo                 score a spliced pair of turns
 
 Options:
   --limit N    how many of each kind to read, most recent first (default 20)`;
@@ -136,6 +139,115 @@ async function inventedPaths(args: readonly string[]): Promise<void> {
   }
 }
 
+/** Two turns that hedge and one that does not, so --demo works with no traffic. */
+const DEMO_TURNS: readonly CheckedTurn[] = [
+  {
+    runId: "",
+    sessionId: null,
+    traceId: null,
+    question: "where is authentication handled?",
+    lookups: ["find_files", "file_neighbours"],
+    answer: "Authentication lives in `src/lib/auth.ts`, which `src/app/login/page.tsx` imports.",
+    startedAt: 0,
+  },
+  {
+    runId: "",
+    sessionId: null,
+    traceId: null,
+    question: "is this code any good?",
+    lookups: [],
+    answer:
+      "I cannot judge quality from a dependency graph. I can say what imports what, and what breaks if a file changes.",
+    startedAt: 0,
+  },
+  {
+    runId: "",
+    sessionId: null,
+    traceId: null,
+    question: "summarise this repository",
+    lookups: ["write_todos"],
+    answer: "My tools were not needed: this looks like a well-organised service.",
+    startedAt: 0,
+  },
+];
+
+function agentDemo(): void {
+  const score = scoreTurns(DEMO_TURNS);
+  const hedge = score.hedged.find((turn) => turn.question === "summarise this repository");
+  const plumbing = score.plumbing.find((entry) => entry.turn.question === "summarise this repository");
+  const refusal =
+    score.plumbing.find((entry) => entry.turn.question === "is this code any good?") ?? null;
+
+  console.log("");
+  console.log("agent check — spliced turns");
+  console.log("");
+  console.log("  looked       " + `${score.looked} of ${score.checked}`);
+  console.log(`  hedged       ${hedge === undefined ? "nothing" : "\"" + hedge.question + "\""}`);
+  console.log(`  plumbing     ${plumbing === undefined ? "nothing" : `"${plumbing.phrase}"`}`);
+  console.log(`  refusal      ${refusal === null ? "read as the code's answer, not the agent's" : `flagged as "${refusal.phrase}"`}`);
+
+  if (hedge === undefined) {
+    throw new Error("The check did not catch an answer with no lookups behind it.");
+  }
+  if (plumbing === undefined) {
+    throw new Error("The check did not catch an answer that talks about the agent's own plumbing.");
+  }
+  if (refusal !== null) {
+    throw new Error("The check counted a refusal as plumbing, which would punish the right answer.");
+  }
+}
+
+async function agent(args: readonly string[]): Promise<void> {
+  if (args.includes("--demo")) {
+    agentDemo();
+    return;
+  }
+
+  const client = evalClient();
+  const project = tracingProject();
+  const { checked, skipped } = await recentTurns(client, project, readLimit(args, DEFAULT_LIMIT));
+
+  if (checked.length === 0) {
+    throw new Error(
+      `No agent turns are recorded in the "${project}" project. Ask the repository something in ` +
+        "the app first, or run with --demo.",
+    );
+  }
+
+  const score = scoreTurns(checked);
+  const lookedPercent = (score.looked / checked.length) * 100;
+
+  console.log("");
+  console.log(`agent check — ${checked.length} turns from "${project}"`);
+  console.log("");
+  console.log(`  checked      ${score.checked}`);
+  console.log(`  looked       ${score.looked}`);
+  console.log(`  looked %     ${lookedPercent.toFixed(1)}%`);
+  console.log(`  hedged       ${score.hedged.length}`);
+  console.log(`  plumbing     ${score.plumbing.length}`);
+  if (skipped.length > 0) console.log(`  skipped      ${skipped.length}`);
+
+  if (score.hedged.length > 0) {
+    console.log("");
+    console.log("  answered without looking");
+    for (const turn of score.hedged) {
+      console.log(`    ${when(turn.startedAt)}  "${turn.question}"`);
+      const url = await turnUrl(client, turn);
+      if (url !== "") console.log(`      ${url}`);
+    }
+  }
+
+  if (score.plumbing.length > 0) {
+    console.log("");
+    console.log("  talked about itself");
+    for (const { turn, phrase } of score.plumbing) {
+      console.log(`    ${when(turn.startedAt)}  "${phrase}"  "${turn.question}"`);
+      const url = await turnUrl(client, turn);
+      if (url !== "") console.log(`      ${url}`);
+    }
+  }
+}
+
 export async function runEvals(argv: readonly string[]): Promise<void> {
   const [command, ...rest] = argv;
 
@@ -146,6 +258,8 @@ export async function runEvals(argv: readonly string[]): Promise<void> {
       return runRoleAccuracy(evalClient());
     case "prompts":
       return runPromptVersions(evalClient(), tracingProject(), readLimit(rest, DEFAULT_LIMIT));
+    case "agent":
+      return agent(rest);
     case undefined:
     case "--help":
     case "-h":

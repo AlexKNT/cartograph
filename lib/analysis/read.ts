@@ -146,11 +146,19 @@ async function readRouteRows(
   }
 }
 
-/** A row that is not a uuid is a URL nobody could have meant, not a query. */
-export async function readAnalysis(id: string): Promise<RecordLoad<AnalysisDetail>> {
+/**
+ * A row that is not a uuid is a URL nobody could have meant, not a query.
+ *
+ * The client is an argument because one caller has no session to read a token
+ * from: the agent's tools surface hands in the client the signed credential
+ * built, which reads under the same policies everything else does.
+ */
+export async function readAnalysis(
+  id: string,
+  supabase: SupabaseClient = createServerSupabaseClient(),
+): Promise<RecordLoad<AnalysisDetail>> {
   if (!UUID.test(id)) return { kind: "missing" };
 
-  const supabase = createServerSupabaseClient();
   const { data, error } = await supabase
     .from("analyses")
     .select(ANALYSIS_COLUMNS)
@@ -171,9 +179,10 @@ export interface StoredGraph {
   routes: StoredRoute[];
 }
 
-export async function readGraph(analysis: AnalysisDetail): Promise<ReadLoad<StoredGraph>> {
-  const supabase = createServerSupabaseClient();
-
+export async function readGraph(
+  analysis: AnalysisDetail,
+  supabase: SupabaseClient = createServerSupabaseClient(),
+): Promise<ReadLoad<StoredGraph>> {
   try {
     const fileRows = await readFileRows(supabase, analysis.id);
     const edgeRows = await readEdgeRows(supabase, analysis.id);
@@ -344,9 +353,8 @@ function neighbours(
 export async function readFileSubject(
   analysisId: string,
   path: string,
+  supabase: SupabaseClient = createServerSupabaseClient(),
 ): Promise<RecordLoad<FileSubject>> {
-  const supabase = createServerSupabaseClient();
-
   try {
     const { data: file, error } = await supabase
       .from("files")

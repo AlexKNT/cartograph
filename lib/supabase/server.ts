@@ -18,3 +18,17 @@ export function createServerSupabaseClient(): SupabaseClient {
     },
   });
 }
+
+/**
+ * The same client, reading under a token that was handed to it rather than one
+ * read from a session. This is what the agent's tools surface uses: the token
+ * is the asker's own org-scoped one, carried inside the signed credential, so
+ * the policy still decides what comes back and no key here can read past it.
+ */
+export function createSupabaseClientWithToken(accessToken: string): SupabaseClient {
+  assertServerEnv();
+
+  return createClient(env.supabaseUrl, env.supabasePublishableKey, {
+    accessToken: async () => accessToken,
+  });
+}

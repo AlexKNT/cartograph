@@ -1,0 +1,26 @@
+{
+  "name": "cartograph-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "langgraphjs dev --host 127.0.0.1 --no-browser",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@langchain/core": "^1.2.14",
+    "@langchain/langgraph": "^1.4.19",
+    "@langchain/langgraph-checkpoint": "^1.1.5",
+    "@langchain/langgraph-sdk": "^1.12.1",
+    "@langchain/openai": "^1.6.2",
+    "deepagents": "^1.14.1",
+    "langchain": "^1.5.15",
+    "langsmith": "^0.9.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@langchain/langgraph-cli": "^1.5.2",
+    "@types/node": "^22",
+    "typescript": "^5"
+  }
+}

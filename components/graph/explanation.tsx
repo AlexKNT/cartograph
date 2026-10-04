@@ -10,10 +10,9 @@
  * nobody can trust.
  */
 
-import { useMemo } from "react";
+import { Prose } from "@/components/graph/prose";
 import { reRunAnalysis } from "@/lib/actions/analyse";
 import type { ExplainOutcome } from "@/lib/ai/explain";
-import { parseExplanation, type Span } from "@/lib/ai/render";
 import type { Selection } from "@/lib/graph/types";
 
 export type ExplanationState = { kind: "working" } | { kind: "done"; outcome: ExplainOutcome };
@@ -34,47 +33,6 @@ function bodyOf(state: ExplanationState | null): string | null {
   if (state.outcome.status === "explained") return state.outcome.body;
   if (state.outcome.status === "stale") return state.outcome.body;
   return null;
-}
-
-function Spans({
-  spans,
-  onSelectPath,
-}: {
-  spans: readonly Span[];
-  onSelectPath: (path: string) => void;
-}) {
-  return (
-    <>
-      {spans.map((span, index) => {
-        if (span.kind === "text") return <span key={index}>{span.text}</span>;
-        if (span.kind === "code") {
-          return (
-            <code key={index} className="rounded-[2px] bg-background px-0.5 font-mono text-[11px]">
-              {span.text}
-            </code>
-          );
-        }
-        if (span.kind === "strong") {
-          return (
-            <strong key={index} className="font-semibold">
-              <Spans spans={span.spans} onSelectPath={onSelectPath} />
-            </strong>
-          );
-        }
-        return (
-          <button
-            key={index}
-            type="button"
-            title={span.path}
-            onClick={() => onSelectPath(span.path)}
-            className="font-mono text-[11px] text-accent hover:underline"
-          >
-            {span.path}
-          </button>
-        );
-      })}
-    </>
-  );
 }
 
 export interface ExplanationPaneProps {
@@ -100,10 +58,6 @@ export function ExplanationPane({
   onSelectPath,
 }: ExplanationPaneProps) {
   const body = bodyOf(state);
-  const blocks = useMemo(
-    () => (body === null ? [] : parseExplanation(body, (text) => paths.has(text))),
-    [body, paths],
-  );
 
   const tracingNote = tracing ? null : (
     <p className="font-mono text-[10px] text-muted">
@@ -171,26 +125,7 @@ export function ExplanationPane({
         <p className="font-mono text-[11px] text-outgoing">{outcome.message}</p>
       )}
 
-      {blocks.map((block, index) =>
-        block.kind === "paragraph" ? (
-          <p key={index} className="text-[11px] leading-relaxed">
-            <Spans spans={block.spans} onSelectPath={onSelectPath} />
-          </p>
-        ) : (
-          <ul key={index} className="flex flex-col gap-1">
-            {block.items.map((item, itemIndex) => (
-              <li key={itemIndex} className="flex gap-1.5 text-[11px] leading-relaxed">
-                <span aria-hidden className="text-muted">
-                  –
-                </span>
-                <span className="min-w-0 flex-1">
-                  <Spans spans={item} onSelectPath={onSelectPath} />
-                </span>
-              </li>
-            ))}
-          </ul>
-        ),
-      )}
+      {body !== null && <Prose body={body} paths={paths} onSelectPath={onSelectPath} />}
     </div>
   );
 }

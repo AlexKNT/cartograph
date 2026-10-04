@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // The agent is its own service with its own package.json and tsconfig, run
+    // by the LangGraph runtime rather than by Next.
+    "agent/**",
   ]),
 ]);
 

@@ -2,7 +2,9 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { CategorySwatch } from "@/components/category-swatch";
+import { AskPanel } from "@/components/graph/ask-panel";
 import { ExplanationPane, type ExplanationState } from "@/components/graph/explanation";
+import { useAgentChat } from "@/components/graph/use-agent-chat";
 import { fileDetail, overview } from "@/lib/graph/detail";
 import type { Folded, FoldedNode } from "@/lib/graph/fold";
 import { analyse } from "@/lib/graph/insights";
@@ -67,40 +69,72 @@ const TABS: readonly { tab: PaneTab; label: string }[] = [
 export function DetailPane(props: DetailPaneProps) {
   const { tab, onTab } = props;
 
+  // Ask is a mode of the whole pane, not a fourth tab beside the others. A tab
+  // would vanish the moment nothing was selected, and a question about the
+  // repository is not a question about a file. Toggling out returns to whatever
+  // was selected, with its tab and its explanation still where they were.
+  const [ask, setAsk] = useState(false);
+  // Held here rather than inside the panel, so toggling out and back does not
+  // throw the conversation away.
+  const chat = useAgentChat(props.analysisId);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 border-b border-border">
-        {TABS.map(({ tab: id, label }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => onTab(id)}
-            className={`-mb-px border-b px-3 py-1 text-[11px] ${
-              tab === id ? "border-accent text-foreground" : "border-transparent text-muted"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+        {!ask &&
+          TABS.map(({ tab: id, label }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onTab(id)}
+              className={`-mb-px border-b px-3 py-1 text-[11px] ${
+                tab === id ? "border-accent text-foreground" : "border-transparent text-muted"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        <button
+          type="button"
+          title={ask ? "Back to what is selected" : "Ask the repository a question"}
+          onClick={() => setAsk(!ask)}
+          className={`ml-auto -mb-px border-b px-3 py-1 text-[11px] ${
+            ask ? "border-accent text-foreground" : "border-transparent text-muted hover:text-foreground"
+          }`}
+        >
+          {ask ? "Back" : "Ask"}
+        </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">
-        {tab === "explanation" && (
-          <ExplanationPane
-            analysisId={props.analysisId}
-            selection={props.selection}
-            state={props.explanation}
-            tracing={props.tracing}
-            paths={props.paths}
-            onExplain={props.onExplain}
-            onSelectPath={props.onSelectPath}
-          />
-        )}
-        {tab === "routes" && <RouteTable {...props} />}
-        {tab === "structure" && <Structure {...props} />}
-      </div>
+      {ask ? (
+        <AskPanel
+          turns={chat.turns}
+          onAsk={(question, selected) => void chat.send(question, selected)}
+          selection={props.selection}
+          paths={props.paths}
+          onSelectPath={props.onSelectPath}
+        />
+      ) : (
+        <>
+          <div className="min-h-0 flex-1 overflow-y-auto p-2">
+            {tab === "explanation" && (
+              <ExplanationPane
+                analysisId={props.analysisId}
+                selection={props.selection}
+                state={props.explanation}
+                tracing={props.tracing}
+                paths={props.paths}
+                onExplain={props.onExplain}
+                onSelectPath={props.onSelectPath}
+              />
+            )}
+            {tab === "routes" && <RouteTable {...props} />}
+            {tab === "structure" && <Structure {...props} />}
+          </div>
 
-      <Insights {...props} />
+          <Insights {...props} />
+        </>
+      )}
     </div>
   );
 }
