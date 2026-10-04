@@ -11,7 +11,12 @@ import type {
 /** A file before the arithmetic has run over the edge list. */
 export type FileFacts = Omit<ParsedFile, "fanIn" | "fanOut">;
 
-const KIND_ORDER: readonly EdgeKind[] = ["import", "re-export", "dynamic-import"];
+const KIND_ORDER: readonly EdgeKind[] = [
+  "import",
+  "re-export",
+  "dynamic-import",
+  "require",
+];
 
 function compareEdges(left: ImportEdge, right: ImportEdge): number {
   if (left.from !== right.from) return left.from < right.from ? -1 : 1;

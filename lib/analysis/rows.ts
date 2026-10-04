@@ -25,7 +25,12 @@ import type {
 } from "../supabase/types.ts";
 
 /** The parser's kinds, in the order it reports them for a pair of files. */
-const KIND_ORDER: readonly EdgeKind[] = ["import", "re-export", "dynamic-import"];
+const KIND_ORDER: readonly EdgeKind[] = [
+  "import",
+  "re-export",
+  "dynamic-import",
+  "require",
+];
 
 /**
  * The parser calls a dynamic import `dynamic-import`; the column's check
@@ -36,12 +41,14 @@ const STORED_KIND: Readonly<Record<EdgeKind, StoredEdgeKind>> = {
   import: "import",
   "re-export": "re-export",
   "dynamic-import": "dynamic",
+  require: "require",
 };
 
 const PARSER_KIND: Readonly<Record<string, EdgeKind>> = {
   import: "import",
   "re-export": "re-export",
   dynamic: "dynamic-import",
+  require: "require",
 };
 
 /** A fact about the extension, not about the file's contents. */

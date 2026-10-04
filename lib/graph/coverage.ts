@@ -9,7 +9,7 @@ import type { CoverageReport, ImportProblemReason } from "../parser/types.ts";
 
 /** What a run records about the imports it saw. Mirrors the columns on `analyses`. */
 export interface CoverageCounts {
-  /** Every import, re-export and literal dynamic import the parser saw. */
+  /** Every import, re-export, literal dynamic import and `require()` seen. */
   seen: number;
   /** The ones that became edges. */
   resolved: number;

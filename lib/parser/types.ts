@@ -6,8 +6,8 @@
  * database: the parser takes a directory path and returns data.
  */
 
-/** The three statement kinds that produce an edge. */
-export type EdgeKind = "import" | "re-export" | "dynamic-import";
+/** The four statement kinds that produce an edge. */
+export type EdgeKind = "import" | "re-export" | "dynamic-import" | "require";
 
 /** Why a file on disk did not become a node. */
 export type FileSkipReason =
@@ -47,7 +47,9 @@ export type ImportProblemReason =
   /** Unresolved: the specifier is empty. */
   | "empty-specifier"
   /** Unresolved: a dynamic import whose argument is not a string literal. */
-  | "non-literal-dynamic-import";
+  | "non-literal-dynamic-import"
+  /** Unresolved: a `require()` call whose argument is not a string literal. */
+  | "non-literal-require";
 
 export type ImportOutcome =
   | { status: "resolved"; to: string }
@@ -55,7 +57,7 @@ export type ImportOutcome =
   | { status: "excluded"; reason: ImportProblemReason; detail: string }
   | { status: "unresolved"; reason: ImportProblemReason; detail: string };
 
-/** Every import, re-export and literal dynamic import the parser saw. */
+/** Every import, re-export, literal dynamic import and `require()` the parser saw. */
 export interface SeenImport {
   /** The file the statement appears in. */
   from: string;

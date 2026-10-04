@@ -250,10 +250,11 @@ export function resolveImport(
   hints: ResolutionHints,
 ): ImportOutcome {
   if (!statement.literal) {
+    const isRequire = statement.kind === "require";
     return {
       status: "unresolved",
-      reason: "non-literal-dynamic-import",
-      detail: `dynamic import argument is ${statement.argumentKind ?? "not a string literal"}`,
+      reason: isRequire ? "non-literal-require" : "non-literal-dynamic-import",
+      detail: `${isRequire ? "require argument" : "dynamic import argument"} is ${statement.argumentKind ?? "not a string literal"}`,
     };
   }
 

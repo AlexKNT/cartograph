@@ -8,9 +8,9 @@ export interface ImportStatement {
   kind: EdgeKind;
   /** 1-based. */
   line: number;
-  /** False only for a dynamic import whose argument the parser cannot read. */
+  /** False only for a dynamic import or `require()` the parser cannot read. */
   literal: boolean;
-  /** What the argument was, for a non-literal dynamic import. */
+  /** What the argument was, for a non-literal dynamic import or `require()`. */
   argumentKind?: string;
 }
 
@@ -27,9 +27,11 @@ export function createImportProject(): Project {
 }
 
 /**
- * Reads the three kinds of statement that produce an edge: a plain import, a
- * re-export, and a dynamic import with a literal string. `require()` is not
- * read here — it is a different module system and a later phase.
+ * Reads the four kinds of statement that produce an edge: a plain import, a
+ * re-export, a dynamic import with a literal string, and a `require()` call
+ * with a literal string. A `require()` whose argument is not a literal is
+ * reported the same way a dynamic import's is: seen, and named as unreadable,
+ * never skipped quietly.
  */
 export function readImportStatements(
   project: Project,
@@ -65,9 +67,17 @@ export function readImportStatements(
     }
 
     for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-      if (call.getExpression().getKind() !== SyntaxKind.ImportKeyword) continue;
+      const expression = call.getExpression();
       const argument = call.getArguments()[0];
       const line = call.getStartLineNumber();
+
+      // A bare `require("x")`. A property access such as `require.resolve("x")`
+      // reaches for something other than the module itself, so it is not read.
+      const isRequire =
+        Node.isIdentifier(expression) && expression.getText() === "require";
+      if (!isRequire && expression.getKind() !== SyntaxKind.ImportKeyword) continue;
+
+      const kind: EdgeKind = isRequire ? "require" : "dynamic-import";
 
       if (
         Node.isStringLiteral(argument) ||
@@ -75,7 +85,7 @@ export function readImportStatements(
       ) {
         statements.push({
           specifier: argument.getLiteralText(),
-          kind: "dynamic-import",
+          kind,
           line,
           literal: true,
         });
@@ -84,7 +94,7 @@ export function readImportStatements(
 
       statements.push({
         specifier: "",
-        kind: "dynamic-import",
+        kind,
         line,
         literal: false,
         argumentKind: argument?.getKindName() ?? "no argument",

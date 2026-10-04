@@ -38,6 +38,12 @@ const FRAMEWORK_RAILS: Readonly<Record<string, readonly RailEntry[]>> = {
     { id: "component", label: "Components", swatch: "source" },
     { id: "hook", label: "Hooks", swatch: "barrel" },
   ],
+  express: [
+    { id: "route", label: "Routes", swatch: "source" },
+    { id: "controller", label: "Controllers", swatch: "barrel" },
+    { id: "middleware", label: "Middleware", swatch: "declaration" },
+    { id: "model", label: "Models", swatch: "test" },
+  ],
 };
 
 /** The rail a framework presents, or the generic one when nothing matched. */

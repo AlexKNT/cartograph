@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { EXPRESS_ADAPTER } from "./express.ts";
 import { FALLBACK_ADAPTER, type RepositoryAdapter } from "./index.ts";
 import { NEST_ADAPTER } from "./nestjs.ts";
 import { NEXT_ADAPTER } from "./nextjs.ts";
@@ -65,6 +66,10 @@ export function detectAdapter(
   if (dependencies.has("react") || paths.some((path) => /\.(tsx|jsx)$/.test(path))) {
     return REACT_ADAPTER;
   }
+
+  // Checked last, so a repository that already matched an adapter keeps the one
+  // it had: a full-stack repository with React in it stays a React repository.
+  if (dependencies.has("express")) return EXPRESS_ADAPTER;
 
   return FALLBACK_ADAPTER;
 }
