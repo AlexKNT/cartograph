@@ -104,7 +104,7 @@ export default async function AnalysisPage({ params }: PageProps<"/analysis/[id]
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex shrink-0 flex-wrap items-baseline gap-3 border-b border-border px-2 py-1.5 font-mono text-[11px]">
-        <Link href="/" className="text-muted hover:text-accent">
+        <Link href="/dashboard" className="text-muted hover:text-accent">
           dashboard
         </Link>
         <span>{repository}</span>

@@ -142,7 +142,7 @@ export async function analyseRepository(
 
 export async function reRunAnalysis(analysisId: string): Promise<void> {
   const { orgId } = await auth();
-  if (orgId === undefined || orgId === null) redirect("/");
+  if (orgId === undefined || orgId === null) redirect("/dashboard");
 
   const supabase = createServerSupabaseClient();
   const { data } = await supabase

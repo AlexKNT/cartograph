@@ -4,6 +4,9 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 // has no session of its own, and the request authenticates with the signed
 // credential the app minted instead. The route is the only thing that reads it.
 const isPublicRoute = createRouteMatcher([
+  // The landing page is the one screen a stranger sees, and it sends a pasted
+  // repository through sign-in itself rather than being walled off first.
+  "/",
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/api/agent/tools",
