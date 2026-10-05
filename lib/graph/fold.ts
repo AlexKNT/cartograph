@@ -125,7 +125,10 @@ function holdAt(
     );
 
     for (const directory of level) {
-      // The root has nowhere to go, so it is never merged away.
+      // The root has nowhere to go, so it is never merged away. That is the one
+      // node that can end up holding a single file, and it is left that way on
+      // purpose: the alternative is showing that file inside a folder it is not
+      // in, which is the same kind of wrong as a guessed edge.
       if (directory.parent === null) continue;
 
       const files = heldIn(held, directory.path);

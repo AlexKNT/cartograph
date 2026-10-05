@@ -60,8 +60,11 @@
 
 1. Node count, under roughly two dozen, and in the region of one node per ten
    files.
-2. Every node holds more than one file. Single files appearing as nodes means
-   the folding rule isn't implemented, because it cannot produce that.
+2. Every node holds more than one file, **except the repository root**. The root
+   has no parent to merge into, so it is the one node that can end up holding a
+   single file, and it is left alone rather than moved into a folder it is not
+   in. Any other single-file node means the folding rule isn't implemented,
+   because it cannot produce that.
 3. Every edge terminates on a node that exists.
 
 **Then two of mine, five seconds each:**

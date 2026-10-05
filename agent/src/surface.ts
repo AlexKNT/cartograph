@@ -7,14 +7,14 @@
  */
 import type { ToolRuntime } from "@langchain/core/tools";
 
-/** The six names the surface understands. */
+/** The six names the surface understands, spelled exactly as it spells them. */
 export type SurfaceTool =
-  | "analysis_summary"
+  | "summary"
   | "find_files"
   | "files_by_role"
   | "file_neighbours"
-  | "walk_dependencies"
-  | "route_table";
+  | "walk"
+  | "routes";
 
 function fieldOf(value: unknown, key: string): unknown {
   if (typeof value !== "object" || value === null) return undefined;

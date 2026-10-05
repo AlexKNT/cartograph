@@ -18,7 +18,7 @@ const path = z
   .describe("A repository-relative file path, exactly as a previous tool returned it.");
 
 export const repositoryTools = [
-  tool(async (_input, runtime: Runtime) => callSurface("analysis_summary", {}, runtime), {
+  tool(async (_input, runtime: Runtime) => callSurface("summary", {}, runtime), {
     name: "analysis_summary",
     description:
       "Summary of the whole analysis: the framework, file and edge counts, how much of the parse resolved, the categories in use, and four facts about the graph. Start here when you do not know the repository yet.",
@@ -60,7 +60,7 @@ export const repositoryTools = [
     schema: z.object({ path }),
   }),
 
-  tool(async (input, runtime: Runtime) => callSurface("walk_dependencies", input, runtime), {
+  tool(async (input, runtime: Runtime) => callSurface("walk", input, runtime), {
     name: "walk_dependencies",
     description:
       "Walk the dependency graph from one file, in one direction, a few steps. `in` follows everything that depends on the file (what breaks if it changes); `out` follows everything the file needs. The walk is arithmetic over parsed edges, so it is the only way to move through the graph.",
@@ -77,7 +77,7 @@ export const repositoryTools = [
     }),
   }),
 
-  tool(async (_input, runtime: Runtime) => callSurface("route_table", {}, runtime), {
+  tool(async (_input, runtime: Runtime) => callSurface("routes", {}, runtime), {
     name: "route_table",
     description:
       "Every HTTP route the parser recovered exactly, with its method, its path pattern and the file it lives in. Routes whose method or full path could not both be recovered are absent, not approximated.",

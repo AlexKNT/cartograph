@@ -101,10 +101,14 @@ function joinRepositoryPath(folder: string, specifier: string): string {
 function candidatesFor(candidate: string): string[] {
   const found: string[] = [];
   const seen = new Set<string>();
+  // Normalised here rather than at each call site: the suffix passes below
+  // build `./index.js` out of a root candidate of ".", and a node's path is
+  // never spelled that way, so `require("../..")` would miss the root's index.
   const push = (path: string) => {
-    if (seen.has(path)) return;
-    seen.add(path);
-    found.push(path);
+    const normalised = posix.normalize(path);
+    if (seen.has(normalised)) return;
+    seen.add(normalised);
+    found.push(normalised);
   };
 
   push(candidate);
